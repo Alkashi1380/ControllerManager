@@ -43,7 +43,10 @@ namespace ControllerManager
                         foreach (var p in loaded)
                             ProfileMigration.Migrate(p);
                         if (legacy > 0)
+                        {
+                            BackupBeforeMigration(sourcePath);
                             Log.Info($"{legacy} profil(s) migré(s) vers le format v{ProfileMigration.CurrentVersion} (réglages par stick)");
+                        }
                         // Liste complète (id compris) avant publication : le thread d'entrées ne voit jamais un état partiel
                         EnsureProfileIds(loaded);
                         _profiles = loaded;
@@ -134,6 +137,22 @@ namespace ControllerManager
                 ProfileMigration.Migrate(p); // crée leftStick / rightStick à partir des réglages ci-dessus
             EnsureProfileIds(defaults);
             _profiles = defaults;
+        }
+
+        // Copie de l'ancien fichier, une seule fois : permet de revenir en arrière si la migration pose problème
+        private void BackupBeforeMigration(string sourcePath)
+        {
+            try
+            {
+                Directory.CreateDirectory(AppDataDir);
+                string backup = Path.Combine(AppDataDir, "profiles.v1-backup.json");
+                if (!File.Exists(backup))
+                {
+                    File.Copy(sourcePath, backup);
+                    Log.Info($"Sauvegarde des profils avant migration : {backup}");
+                }
+            }
+            catch (Exception ex) { Log.Warn("Sauvegarde avant migration impossible", ex); }
         }
 
         private void SaveProfilesToDisk()
