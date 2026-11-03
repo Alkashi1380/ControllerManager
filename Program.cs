@@ -227,16 +227,23 @@ namespace ControllerManager
             prevDown = down;
         }
 
+        // Appui + relâchement : sans KEYUP, Windows garde la touche « enfoncée » dans son état clavier
+        public static void TapKey(byte vk)
+        {
+            keybd_event(vk, 0, 0, 0);
+            keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+        }
+
         public static void ExecuteAction(string action)
         {
             switch (action)
             {
-                case "Volume +": keybd_event(VK_VOLUME_UP, 0, 0, 0); break;
-                case "Volume -": keybd_event(VK_VOLUME_DOWN, 0, 0, 0); break;
-                case "Mute": keybd_event(VK_VOLUME_MUTE, 0, 0, 0); break;
-                case "Play / Pause": keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0); break;
-                case "Piste Suivante": keybd_event(VK_MEDIA_NEXT_TRACK, 0, 0, 0); break;
-                case "Piste Précédente": keybd_event(VK_MEDIA_PREV_TRACK, 0, 0, 0); break;
+                case "Volume +": TapKey(VK_VOLUME_UP); break;
+                case "Volume -": TapKey(VK_VOLUME_DOWN); break;
+                case "Mute": TapKey(VK_VOLUME_MUTE); break;
+                case "Play / Pause": TapKey(VK_MEDIA_PLAY_PAUSE); break;
+                case "Piste Suivante": TapKey(VK_MEDIA_NEXT_TRACK); break;
+                case "Piste Précédente": TapKey(VK_MEDIA_PREV_TRACK); break;
                 case "Touche Espace (Saut)":
                     keybd_event(VK_SPACE, 0, 0, 0);
                     keybd_event(VK_SPACE, 0, KEYEVENTF_KEYUP, 0);
