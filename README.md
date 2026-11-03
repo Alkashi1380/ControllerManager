@@ -12,7 +12,8 @@ Outil hybride ultra-léger de diagnostic de manettes, surveillance de batterie e
   - `Tray/TrayApplicationContext.InputMapping.cs` : boucle d'entrées, XInput, sticks / pavé tactile → souris & clavier.
   - `Tray/TrayApplicationContext.Profiles.cs` : chargement / sauvegarde des profils (`%APPDATA%\ControllerManager\profiles.json`).
   - `Tray/TrayApplicationContext.WebBridge.cs` : messages JSON entre le C# et `UI/index.html`.
-  - `Hardware/` (XInput, CRC DualSense), `Input/VirtualInput.cs`, `Forms/HudOverlayForm.cs`, `Models/GamepadProfile.cs`.
+  - `Hardware/` (XInput, CRC DualSense, `SonyReportParser` = décodage des trames), `Input/` (souris/clavier simulés, `KeyCombo` = raccourcis personnalisés), `Forms/` (HUD, icône), `Infrastructure/` (journal, détection administrateur), `Models/GamepadProfile.cs`.
+- **`ControllerManager.Tests/`** : tests unitaires xUnit (trames DualSense réelles, CRC, raccourcis, élévation) — `dotnet test ControllerManager.Tests`.
 - **`ControllerManager.csproj`** : Le fichier de projet .NET 8 (WinForms + WebView2 + HidSharp).
 - **`profiles.json`** : Créé automatiquement dans `%APPDATA%\ControllerManager\` (profils par défaut générés au premier lancement).
 - **`build_and_run.bat`** : Script rapide pour lancer ou compiler l'application en un clic.
@@ -38,3 +39,12 @@ Prérequis : [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) inst
    ```bash
    ControllerManager.exe --tray
    ```
+
+## ✨ Fonctions principales
+
+- **Manettes** : DualSense / DualShock 4 en direct HID (USB et Bluetooth), Xbox via XInput (fonctionne en arrière-plan). Option *Toutes les manettes actives* pour utiliser PS et Xbox en même temps.
+- **Profils par jeu** : bascule instantanée selon la fenêtre active, couleur de barre lumineuse, gâchettes adaptatives, sticks → souris / molette / ZQSD-WASD / flèches, pavé tactile → souris (1 doigt) et défilement (2 doigts).
+- **Raccourcis** : actions prédéfinies (multimédia, clics, Alt+Tab…) ou *Touche personnalisée* (ex. `Ctrl+Shift+S`, `F5`, `Win+E`).
+- **Pause depuis la manette** : PS + Options (PS5) ou View + Menu (Xbox) ; l'icône devient grise.
+- **Alertes** : batterie faible (20 %) et critique (10 %), logiciel en conflit détecté (DS4Windows, InputMapper, DSX), jeu lancé en administrateur (menu *Relancer en administrateur*).
+- **Journal** : `%LOCALAPPDATA%\ControllerManager\logs\controllermanager.log` (menu Outils → *Ouvrir le dossier des journaux*).

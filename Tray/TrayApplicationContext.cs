@@ -228,6 +228,16 @@ namespace ControllerManager
             };
             contextMenu.Items.Add(multiItem);
 
+            if (!ElevationHelper.IsCurrentProcessElevated)
+            {
+                contextMenu.Items.Add("🛡️ Relancer en administrateur (jeux admin)", null, (_, _) =>
+                {
+                    Log.Info("Relance en administrateur demandée");
+                    if (ElevationHelper.RestartElevated())
+                        ExitThread();
+                });
+            }
+
             _controllersRootMenuItem = new ToolStripMenuItem("🕹️ Manette Active : Auto");
             contextMenu.Items.Add(_controllersRootMenuItem);
             RebuildTrayControllersMenu();
@@ -683,6 +693,7 @@ namespace ControllerManager
                         autoSwitch = _autoSwitchEnabled,
                         mappingEnabled = _mappingEnabled
                     });
+                    WarnIfForegroundElevated(pid, exeName);
                     return;
                 }
 
@@ -707,8 +718,35 @@ namespace ControllerManager
                         mappingEnabled = _mappingEnabled
                     });
                 }
+
+                // Après une éventuelle bascule : c'est le profil réellement appliqué au jeu qui compte
+                WarnIfForegroundElevated(pid, exeName);
             }
             catch (Exception ex) { Log.Warn("Détection du jeu au premier plan impossible", ex); }
+        }
+
+        private readonly HashSet<string> _elevationWarnedExes = new(StringComparer.OrdinalIgnoreCase);
+
+        // Un jeu lancé en administrateur ignore souris/clavier simulés : on prévient une fois par exe et par session
+        private void WarnIfForegroundElevated(uint pid, string exeName)
+        {
+            if (ElevationHelper.IsCurrentProcessElevated || !_mappingEnabled || _elevationWarnedExes.Contains(exeName))
+                return;
+
+            var prof = GetActiveProfile();
+            bool profileInjectsInput = prof != null &&
+                ((prof.buttonMapping?.Count ?? 0) > 0 ||
+                 prof.leftStickMode != "native" || prof.rightStickMode != "native" ||
+                 prof.touchpadMouseEnabled);
+            if (!profileInjectsInput) return;
+
+            if (ElevationHelper.IsElevated(pid) != true) return;
+
+            _elevationWarnedExes.Add(exeName);
+            Log.Warn($"{exeName} tourne en administrateur : raccourcis et souris bloqués par Windows");
+            _trayIcon.ShowBalloonTip(6000, "🛡️ Programme lancé en administrateur",
+                $"{exeName} est lancé en administrateur : Windows bloque les raccourcis et la souris de la manette. " +
+                "Menu → « Relancer en administrateur » pour les réactiver.", ToolTipIcon.Warning);
         }
 
         protected override void ExitThreadCore()
