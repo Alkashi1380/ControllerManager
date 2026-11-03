@@ -23,9 +23,10 @@ namespace ControllerManager
         private WebView2? _webView;
         private HudOverlayForm? _hudForm;
 
-        private List<GamepadProfile> _profiles = new();
+        // volatile : lus par le thread d'entrées pendant que le thread UI les remplace (on remplace la liste entière, jamais en place)
+        private volatile List<GamepadProfile> _profiles = new();
         // Le profil actif est repéré par son id (stable), pas par son nom (modifiable, pas forcément unique)
-        private string _currentProfileId = "";
+        private volatile string _currentProfileId = "";
 
         private GamepadProfile? GetActiveProfile() =>
             _profiles.FirstOrDefault(p => p.id == _currentProfileId);
@@ -39,15 +40,15 @@ namespace ControllerManager
                 ? _profiles.FirstOrDefault(p => string.Equals(p.name, name, StringComparison.OrdinalIgnoreCase))
                 : null);
         private bool _autoSwitchEnabled = false;
-        private bool _mappingEnabled = true;
+        private volatile bool _mappingEnabled = true;
         private bool _hudEnabled = false;
-        private bool _isDashboardFocused = false;
-        private bool _muteLedActive = false;
+        private volatile bool _isDashboardFocused = false;
+        private volatile bool _muteLedActive = false;
         private string _lastDetectedExe = "explorer.exe";
 
         private List<ControllerSlotInfo> _connectedControllers = new();
-        private int _selectedWebGpIndex = 99;
-        private string _selectedControllerType = "PS5";
+        private volatile int _selectedWebGpIndex = 99;
+        private volatile string _selectedControllerType = "PS5";
 
         private HidDevice? _activeSonyDevice;
         private HidStream? _activeSonyStream;
@@ -115,6 +116,24 @@ namespace ControllerManager
 
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        // Notification Windows à chaque changement de fenêtre active : bascule de profil immédiate
+        private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd,
+            int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc,
+            WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
+
+        private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+        private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+
+        // Référence conservée : sinon le GC libère le délégué et Windows appelle un pointeur invalide
+        private WinEventDelegate? _foregroundHookProc;
+        private IntPtr _foregroundHook = IntPtr.Zero;
 
         public TrayApplicationContext(bool startMinimized)
         {
@@ -195,16 +214,24 @@ namespace ControllerManager
 
             _trayIcon = new NotifyIcon
             {
-                Icon = SystemIcons.Application,
+                Icon = TrayIconRenderer.Create(Color.FromArgb(0, 102, 255), paused: false),
                 Text = $"Gamepad Manager - {ActiveProfileName}",
                 ContextMenuStrip = contextMenu,
                 Visible = true
             };
             _trayIcon.DoubleClick += (_, _) => ShowDashboard();
+            UpdateTrayIcon();
 
             _backgroundTimer = new System.Windows.Forms.Timer { Interval = 2000 };
             _backgroundTimer.Tick += BackgroundMonitoringTick;
             _backgroundTimer.Start();
+
+            // Le timer de 2 s reste en filet de sécurité si le hook ne peut pas être installé
+            _foregroundHookProc = (_, _, _, _, _, _, _) => CheckForegroundGameAndSwitchProfile();
+            _foregroundHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero,
+                _foregroundHookProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+            if (_foregroundHook == IntPtr.Zero)
+                Log.Warn("Hook de fenêtre active indisponible, détection du jeu toutes les 2 s");
 
             _inputPollingThread = new System.Threading.Thread(InputPollingLoop) { IsBackground = true };
             _inputPollingThread.Start();
@@ -282,6 +309,16 @@ namespace ControllerManager
             _mappingToggleMenuItem.Text = _mappingEnabled
                 ? "⌨️ Raccourcis & Sticks : Actifs"
                 : "🔇 Raccourcis & Sticks : En Pause (Mode Test)";
+            UpdateTrayIcon();
+        }
+
+        private void UpdateTrayIcon()
+        {
+            if (_trayIcon == null) return; // appelé pendant le constructeur, avant la création de l'icône
+            var c = GetActiveProfile()?.color ?? new LightbarColor();
+            var old = _trayIcon.Icon;
+            _trayIcon.Icon = TrayIconRenderer.Create(Color.FromArgb(c.r, c.g, c.b), paused: !_mappingEnabled);
+            old?.Dispose();
         }
 
         private void KillConflictingApps(bool killSteam)
@@ -399,6 +436,7 @@ namespace ControllerManager
 
             string modeTag = _autoSwitchEnabled ? "Auto" : "Verrouillé";
             _profilesRootMenuItem.Text = $"🎮 Profil : {ActiveProfileName} [{modeTag}]";
+            UpdateTrayIcon(); // la couleur suit le profil actif
         }
 
         private async void ShowDashboard()
@@ -589,7 +627,7 @@ namespace ControllerManager
                 string exeName = proc.ProcessName + ".exe";
                 _lastDetectedExe = exeName;
 
-                bool isSelf = string.Equals(proc.ProcessName, Process.GetCurrentProcess().ProcessName, StringComparison.OrdinalIgnoreCase);
+                bool isSelf = pid == (uint)Environment.ProcessId;
                 _isDashboardFocused = isSelf;
                 if (isSelf) return;
 
@@ -635,6 +673,11 @@ namespace ControllerManager
         protected override void ExitThreadCore()
         {
             _backgroundTimer.Stop();
+            if (_foregroundHook != IntPtr.Zero)
+            {
+                UnhookWinEvent(_foregroundHook);
+                _foregroundHook = IntPtr.Zero;
+            }
             _muteLedActive = false;
             try { SendDualSenseOutputReport(0, 0, 0, "off", 0, "off", 0); } catch { }
             lock (_sonyLock)

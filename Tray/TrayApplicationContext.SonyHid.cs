@@ -13,6 +13,8 @@ namespace ControllerManager
             {
                 prof.l2TriggerMode = "off";
                 prof.r2TriggerMode = "off";
+                // Sinon les anciens réglages reviennent au prochain chargement de profiles.json
+                SaveProfilesToDisk();
             }
 
             SendDualSenseOutputReport(c.r, c.g, c.b, "off", 0, "off", 0);

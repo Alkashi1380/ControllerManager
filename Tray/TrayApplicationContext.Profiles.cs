@@ -51,15 +51,16 @@ namespace ControllerManager
                             if (p.l2TriggerForce <= 0) p.l2TriggerForce = 180;
                             if (p.r2TriggerForce <= 0) p.r2TriggerForce = 180;
                         }
+                        // Liste complète (id compris) avant publication : le thread d'entrées ne voit jamais un état partiel
+                        EnsureProfileIds(loaded);
                         _profiles = loaded;
-                        EnsureProfileIds();
                         return;
                     }
                 }
                 catch (Exception ex) { Log.Error("Lecture de profiles.json impossible, profils par défaut utilisés", ex); }
             }
 
-            _profiles = new List<GamepadProfile>
+            var defaults = new List<GamepadProfile>
             {
                 new()
                 {
@@ -136,7 +137,8 @@ namespace ControllerManager
                     }
                 }
             };
-            EnsureProfileIds();
+            EnsureProfileIds(defaults);
+            _profiles = defaults;
         }
 
         private void SaveProfilesToDisk()
@@ -150,10 +152,10 @@ namespace ControllerManager
         }
 
         // Donne un id unique aux profils qui n'en ont pas (anciens fichiers) ou qui partagent le même
-        private void EnsureProfileIds()
+        private static void EnsureProfileIds(List<GamepadProfile> profiles)
         {
             var seen = new HashSet<string>();
-            foreach (var p in _profiles)
+            foreach (var p in profiles)
             {
                 if (string.IsNullOrWhiteSpace(p.id) || !seen.Add(p.id))
                 {
