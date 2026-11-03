@@ -1577,6 +1577,42 @@ function initUI() {
   sendToHost({ action: "requestInitState" });
 }
 
+// Raccourcis personnalisés : stockés « Touche:Ctrl+Shift+S » (même format que Input/KeyCombo.cs côté C#)
+const KEY_ACTION_PREFIX = "Touche:";
+const CUSTOM_KEY_OPTION = "__custom_key__";
+const KEY_MODIFIERS = { ctrl: "Ctrl", control: "Ctrl", ctl: "Ctrl", shift: "Shift", maj: "Shift", alt: "Alt", win: "Win", windows: "Win" };
+const KEY_NAMES = ["Enter", "Entrée", "Entree", "Esc", "Escape", "Echap", "Échap", "Tab", "Space", "Espace", "Backspace", "Retour",
+  "Delete", "Del", "Suppr", "Insert", "Inser", "Home", "Début", "Debut", "End", "Fin", "PageUp", "PgUp", "PageDown", "PgDn",
+  "Up", "Haut", "Down", "Bas", "Left", "Gauche", "Right", "Droite", "PrintScreen", "ImprEcran", "Pause"];
+
+function normalizeKeyCombo(text) {
+  if (!text || !text.trim()) return null;
+  const mods = [];
+  let key = null;
+  for (const raw of text.split('+').map(t => t.trim())) {
+    if (!raw) return null;
+    const mod = KEY_MODIFIERS[raw.toLowerCase()];
+    if (mod) { if (!mods.includes(mod)) mods.push(mod); continue; }
+    if (key) return null; // une seule touche non modificatrice
+    const named = KEY_NAMES.find(n => n.toLowerCase() === raw.toLowerCase());
+    if (named) key = named;
+    else if (/^[a-z0-9]$/i.test(raw)) key = raw.toUpperCase();
+    else if (/^f([1-9]|1[0-9]|2[0-4])$/i.test(raw)) key = raw.toUpperCase();
+    else return null;
+  }
+  return key ? [...mods, key].join('+') : null;
+}
+
+function ensureCustomKeyOption(select, value) {
+  if (![...select.options].some(o => o.value === value)) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.innerText = `⌨️ ${value.substring(KEY_ACTION_PREFIX.length)}`;
+    select.insertBefore(opt, select.querySelector(`option[value="${CUSTOM_KEY_OPTION}"]`));
+  }
+  return value;
+}
+
 function initMappingGrid() {
   const container = document.getElementById('mapping-grid');
   container.innerHTML = '';
@@ -1599,8 +1635,26 @@ function initMappingGrid() {
       opt.innerText = act;
       select.appendChild(opt);
     });
+    const customOpt = document.createElement('option');
+    customOpt.value = CUSTOM_KEY_OPTION;
+    customOpt.innerText = "⌨️ Touche personnalisée…";
+    select.appendChild(customOpt);
 
+    let previousValue = select.value;
+    select.onfocus = () => { previousValue = select.value; };
     select.onchange = () => {
+      if (select.value === CUSTOM_KEY_OPTION) {
+        const typed = prompt("Raccourci clavier (ex : Ctrl+Shift+S, F5, Alt+Tab, Win+E)", "");
+        const combo = normalizeKeyCombo(typed);
+        if (!combo) {
+          if (typed) alert("Raccourci non reconnu. Utilisez des touches séparées par + (ex : Ctrl+Alt+Suppr, F11, Ctrl+Z).");
+          select.value = previousValue;
+          select.blur();
+          return;
+        }
+        select.value = ensureCustomKeyOption(select, KEY_ACTION_PREFIX + combo);
+      }
+      previousValue = select.value;
       select.blur();
       refreshMappingHighlights();
       saveCurrentProfile(true);
@@ -1732,7 +1786,9 @@ function loadProfileByIndex(idx, notifyBackend = true) {
   for (let i = 0; i < 20; i++) {
     const sel = document.getElementById(`map-btn-${i}`);
     if (sel) {
-      sel.value = (p.buttonMapping && p.buttonMapping[String(i)]) ? p.buttonMapping[String(i)] : "Défaut (Native)";
+      const mapped = (p.buttonMapping && p.buttonMapping[String(i)]) ? p.buttonMapping[String(i)] : "Défaut (Native)";
+      // Un raccourci personnalisé n'existe pas dans la liste fixe : on ajoute son option avant de le sélectionner
+      sel.value = mapped.startsWith(KEY_ACTION_PREFIX) ? ensureCustomKeyOption(sel, mapped) : mapped;
     }
   }
 

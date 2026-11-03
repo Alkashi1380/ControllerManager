@@ -96,8 +96,32 @@ namespace ControllerManager
             keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
         }
 
+        public const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
+
+        // Modificateurs enfoncés dans l'ordre, touche tapée, puis modificateurs relâchés dans l'ordre inverse
+        public static void SendKeyCombo(KeyCombo combo)
+        {
+            foreach (var mod in combo.Modifiers)
+                keybd_event(mod, 0, KeyFlags(mod), 0);
+
+            keybd_event(combo.Key, 0, KeyFlags(combo.Key), 0);
+            keybd_event(combo.Key, 0, KeyFlags(combo.Key) | KEYEVENTF_KEYUP, 0);
+
+            for (int i = combo.Modifiers.Count - 1; i >= 0; i--)
+                keybd_event(combo.Modifiers[i], 0, KeyFlags(combo.Modifiers[i]) | KEYEVENTF_KEYUP, 0);
+        }
+
+        private static uint KeyFlags(byte vk) => KeyCombo.IsExtended(vk) ? KEYEVENTF_EXTENDEDKEY : 0;
+
         public static void ExecuteAction(string action)
         {
+            if (action.StartsWith(KeyCombo.ActionPrefix, StringComparison.Ordinal))
+            {
+                if (KeyCombo.TryParse(action.Substring(KeyCombo.ActionPrefix.Length), out var combo) && combo != null)
+                    SendKeyCombo(combo);
+                return;
+            }
+
             switch (action)
             {
                 case "Volume +": TapKey(VK_VOLUME_UP); break;
