@@ -7,7 +7,7 @@ echo ========================================================
 echo.
 
 echo [1] Compilation de la version Release optimisee...
-dotnet publish -c Release -r win-x64 --self-contained false -o Release_Finale
+dotnet publish ControllerManager.csproj -c Release -r win-x64 --self-contained false -o Release_Finale
 
 echo.
 echo [2] Copie de l'interface HTML...

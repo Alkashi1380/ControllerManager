@@ -14,9 +14,9 @@ if "%choice%"=="1" (
     dotnet run
     pause
 ) else if "%choice%"=="2" (
-    dotnet publish -c Release -r win-x64 --self-contained false -o ./publish
+    dotnet publish ControllerManager.csproj -c Release -r win-x64 --self-contained false -o Release_Finale
     echo.
-    echo Executable genere dans le dossier ./publish !
+    echo Executable genere dans le dossier Release_Finale !
     pause
 ) else if "%choice%"=="3" (
     start "" "UI\index.html"

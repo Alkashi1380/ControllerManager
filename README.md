@@ -33,7 +33,7 @@ Prérequis : [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) inst
    ```
 3. Pour compiler un exécutable léger :
    ```bash
-   dotnet publish -c Release -r win-x64 --self-contained false
+   dotnet publish ControllerManager.csproj -c Release -r win-x64 --self-contained false -o Release_Finale
    ```
 4. Pour lancer directement minimisé dans la barre des tâches au démarrage :
    ```bash
