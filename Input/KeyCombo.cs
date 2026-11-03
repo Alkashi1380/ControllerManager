@@ -65,7 +65,13 @@ namespace ControllerManager
                 key = vk;
             }
 
-            if (!key.HasValue) return false;
+            if (!key.HasValue)
+            {
+                // Un modificateur seul est une touche à part entière (ex. « Maintenir : Shift » pour courir)
+                if (modifiers.Count != 1) return false;
+                combo = new KeyCombo(Array.Empty<byte>(), modifiers[0]);
+                return true;
+            }
             combo = new KeyCombo(modifiers, key.Value);
             return true;
         }

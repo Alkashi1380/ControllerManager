@@ -16,6 +16,8 @@ namespace ControllerManager.Tests
         [InlineData("Maj+Entrée", new byte[] { 0x10 }, 0x0D)]
         [InlineData("ctrl+ctrl+z", new byte[] { 0x11 }, 0x5A)] // modificateur dupliqué ignoré
         [InlineData("7", new byte[0], 0x37)]
+        [InlineData("Shift", new byte[0], 0x10)] // modificateur seul = la touche elle-même (ex. maintenir Shift)
+        [InlineData("Ctrl", new byte[0], 0x11)]
         public void Parses_ValidCombos(string text, byte[] modifiers, byte key)
         {
             Assert.True(KeyCombo.TryParse(text, out var combo));
@@ -28,7 +30,7 @@ namespace ControllerManager.Tests
         [InlineData("")]
         [InlineData("   ")]
         [InlineData(null)]
-        [InlineData("Ctrl")]      // modificateur seul
+        [InlineData("Ctrl+Shift")] // plusieurs modificateurs sans touche
         [InlineData("Ctrl+")]     // morceau vide
         [InlineData("A+B")]       // deux touches
         [InlineData("F25")]

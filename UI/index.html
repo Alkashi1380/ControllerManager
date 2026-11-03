@@ -526,6 +526,106 @@
   }
   .bind-tile.active-bind .bind-label { color: #60a5fa; }
 
+  /* ---- Raccourcis : tuiles cliquables groupées par famille de boutons ---- */
+  .bind-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .bind-toolbar-hint { font-size: 11.5px; color: var(--text-muted); }
+  .bind-groups { display: flex; flex-direction: column; gap: 14px; }
+  .bind-group-title {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 8px;
+  }
+  .bind-group-title::after { content: ""; flex: 1; height: 1px; background: var(--border-subtle); }
+  .bind-group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 8px; }
+  button.bind-tile { cursor: pointer; text-align: left; color: inherit; font: inherit; min-height: 58px; }
+  button.bind-tile:hover { border-color: var(--border-focus); background: rgba(255, 255, 255, 0.06); }
+  button.bind-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .bind-action {
+    font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+    display: flex; gap: 6px; align-items: center; min-width: 0;
+  }
+  .bind-action-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .bind-tile:not(.active-bind) .bind-action { color: var(--text-muted); font-weight: 500; }
+
+  /* ---- Fenêtres modales ---- */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 100; padding: 16px;
+    background: rgba(3, 3, 6, 0.72); backdrop-filter: blur(6px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    width: min(760px, 100%); max-height: calc(100vh - 32px);
+    display: flex; flex-direction: column;
+    background: #111117; border: 1px solid var(--border-focus); border-radius: var(--radius-lg);
+    box-shadow: 0 24px 80px -12px rgba(0, 0, 0, 0.85);
+  }
+  .modal.small { width: min(440px, 100%); }
+  .modal-head {
+    padding: 16px 20px; border-bottom: 1px solid var(--border-subtle);
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  }
+  .modal-title { font-size: 16px; font-weight: 700; }
+  .modal-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .modal-body { padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; user-select: text; }
+  .modal-foot {
+    padding: 14px 20px; border-top: 1px solid var(--border-subtle);
+    display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap;
+  }
+  .modal-foot .spacer { flex: 1; }
+  .modal-close { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; line-height: 1; padding: 2px 6px; border-radius: 6px; }
+  .modal-close:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.06); }
+
+  .kind-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .kind-option {
+    border: 1px solid var(--border-subtle); background: var(--bg-glass); border-radius: var(--radius-md);
+    padding: 9px 11px; text-align: left; cursor: pointer; color: inherit; font: inherit;
+    display: flex; flex-direction: column; gap: 2px; transition: all 0.12s ease;
+  }
+  .kind-option:hover { border-color: var(--border-focus); }
+  .kind-option b { font-size: 12.5px; }
+  .kind-option span { font-size: 11px; color: var(--text-muted); }
+  .kind-option.selected { border-color: var(--accent); background: rgba(59, 130, 246, 0.14); box-shadow: inset 0 0 0 1px var(--accent); }
+
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .field-hint { font-size: 11px; color: var(--text-muted); line-height: 1.45; }
+  .field-error { font-size: 11.5px; color: var(--danger); min-height: 15px; }
+  .inline-input { display: flex; gap: 6px; }
+  textarea {
+    background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-subtle); color: var(--text-primary);
+    padding: 8px 10px; border-radius: var(--radius-sm); font: 12.5px/1.5 inherit; outline: none;
+    width: 100%; min-height: 90px; resize: vertical;
+  }
+  textarea:focus { border-color: var(--accent); }
+  input.key-capture { font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace; font-size: 14px; text-align: center; cursor: pointer; padding: 9px 10px; }
+  input.key-capture.listening { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  .quick-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .quick-chips .btn { padding: 4px 9px; font-size: 11px; }
+
+  .macro-steps { display: flex; flex-direction: column; gap: 6px; }
+  .macro-step {
+    display: grid; grid-template-columns: 26px 120px 1fr auto; gap: 6px; align-items: center;
+    background: var(--bg-glass); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 6px;
+  }
+  .macro-step-num { font-size: 11px; color: var(--text-muted); text-align: center; }
+  .macro-step-value { display: flex; gap: 6px; min-width: 0; }
+  .macro-step-tools { display: flex; gap: 3px; }
+  .icon-btn {
+    width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 6px; border: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.03);
+    color: var(--text-secondary); cursor: pointer; font-size: 12px;
+  }
+  .icon-btn:hover:not(:disabled) { border-color: var(--border-focus); color: var(--text-primary); }
+  .icon-btn:disabled { opacity: 0.3; cursor: default; }
+  .icon-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+  .empty-hint {
+    border: 1px dashed var(--border-focus); border-radius: var(--radius-md); padding: 14px;
+    text-align: center; font-size: 12px; color: var(--text-muted);
+  }
+  .test-status { font-size: 12px; color: var(--warning); font-weight: 600; }
+  .confirm-message { font-size: 13px; color: var(--text-secondary); line-height: 1.55; white-space: pre-line; }
+
   .hw-grid {
     display: grid;
     grid-template-columns: 1.1fr 0.9fr;
@@ -1014,7 +1114,11 @@
           </div>
         </div>
 
-        <div id="mapping-grid" class="studio-Mapping-grid"></div>
+        <div class="bind-toolbar">
+          <span class="bind-toolbar-hint">Cliquez sur un bouton pour lui associer une action : touche, combinaison, macro, application, texte, lien…</span>
+          <button class="btn ghost-danger" tabindex="-1" onclick="clearAllMappings()">Tout réinitialiser</button>
+        </div>
+        <div id="mapping-grid" class="bind-groups"></div>
       </div>
 
     </div>
@@ -1149,10 +1253,60 @@
 
 </main>
 
+<!-- =========================================================
+     FENÊTRE : ÉDITEUR D'ACTION D'UN BOUTON
+     ========================================================= -->
+<div id="action-modal" class="modal-backdrop" onmousedown="if (event.target === this) closeActionEditor()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="action-modal-title">
+    <div class="modal-head">
+      <div>
+        <div id="action-modal-title" class="modal-title">Configurer le bouton</div>
+        <div id="action-modal-sub" class="modal-sub"></div>
+      </div>
+      <button class="modal-close" title="Fermer (Échap)" onclick="closeActionEditor()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="field">
+        <span class="field-label">Type d'action</span>
+        <div id="kind-picker" class="kind-picker"></div>
+      </div>
+      <div id="action-editor-panel"></div>
+      <div id="action-editor-error" class="field-error"></div>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn" id="action-test-btn" onclick="testEditedAction()" title="Exécute l'action après 3 secondes : cliquez entre-temps dans l'application à tester">▶ Tester (dans 3 s)</button>
+      <span id="action-test-status" class="test-status"></span>
+      <span class="spacer"></span>
+      <button class="btn" onclick="closeActionEditor()">Annuler</button>
+      <button class="btn primary" onclick="saveEditedAction()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     FENÊTRE : CONFIRMATION
+     ========================================================= -->
+<div id="confirm-modal" class="modal-backdrop" onmousedown="if (event.target === this) resolveConfirm(false)">
+  <div class="modal small" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="modal-head">
+      <div id="confirm-title" class="modal-title">Confirmer</div>
+      <button class="modal-close" title="Fermer (Échap)" onclick="resolveConfirm(false)">✕</button>
+    </div>
+    <div class="modal-body"><div id="confirm-message" class="confirm-message"></div></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="resolveConfirm(false)">Annuler</button>
+      <button id="confirm-ok" class="btn primary" onclick="resolveConfirm(true)">Confirmer</button>
+    </div>
+  </div>
+</div>
+
 <script>
 window.addEventListener('keydown', (e) => {
   const tag = document.activeElement ? document.activeElement.tagName : '';
-  if (tag !== 'INPUT') {
+  // Dans une fenêtre modale, le clavier garde son comportement normal (Tab, Entrée, flèches…)
+  if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !document.querySelector('.modal-backdrop.open')) {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter', 'Tab', 'GamepadA', 'GamepadB', 'GamepadLeftShoulder', 'GamepadRightShoulder'].includes(e.key)) {
       e.preventDefault();
       if (document.activeElement && tag === 'SELECT') {
@@ -1576,14 +1730,24 @@ function initUI() {
   sendToHost({ action: "requestInitState" });
 }
 
-// Raccourcis personnalisés : stockés « Touche:Ctrl+Shift+S » (même format que Input/KeyCombo.cs côté C#)
+// =====================================================================
+// RACCOURCIS — format partagé avec Input/MappingAction.cs côté C#
+//   « Volume + » (action rapide) · Touche:Ctrl+S · Maintenir:Shift · Turbo:Space
+//   Texte:… · URL:https://… · Lancer:{"path","args"} · Macro:[{type,…}]
+// =====================================================================
+const NATIVE_ACTION = "Défaut (Native)";
 const KEY_ACTION_PREFIX = "Touche:";
-const CUSTOM_KEY_OPTION = "__custom_key__";
+const ACTION_PREFIXES = { key: "Touche:", hold: "Maintenir:", turbo: "Turbo:", text: "Texte:", url: "URL:", launch: "Lancer:", macro: "Macro:" };
+const MAX_MACRO_STEPS = 64;
+const MAX_DELAY_MS = 10000;
+const MAX_TEXT_LENGTH = 2000;
+
 const KEY_MODIFIERS = { ctrl: "Ctrl", control: "Ctrl", ctl: "Ctrl", shift: "Shift", maj: "Shift", alt: "Alt", win: "Win", windows: "Win" };
 const KEY_NAMES = ["Enter", "Entrée", "Entree", "Esc", "Escape", "Echap", "Échap", "Tab", "Space", "Espace", "Backspace", "Retour",
   "Delete", "Del", "Suppr", "Insert", "Inser", "Home", "Début", "Debut", "End", "Fin", "PageUp", "PgUp", "PageDown", "PgDn",
   "Up", "Haut", "Down", "Bas", "Left", "Gauche", "Right", "Droite", "PrintScreen", "ImprEcran", "Pause"];
 
+// Normalise « ctrl + shift + s » en « Ctrl+Shift+S » ; null si invalide. Un modificateur seul est accepté (ex. Shift).
 function normalizeKeyCombo(text) {
   if (!text || !text.trim()) return null;
   const mods = [];
@@ -1599,70 +1763,173 @@ function normalizeKeyCombo(text) {
     else if (/^f([1-9]|1[0-9]|2[0-4])$/i.test(raw)) key = raw.toUpperCase();
     else return null;
   }
-  return key ? [...mods, key].join('+') : null;
+  if (!key) return mods.length === 1 ? mods[0] : null;
+  return [...mods, key].join('+');
 }
 
-function ensureCustomKeyOption(select, value) {
-  if (![...select.options].some(o => o.value === value)) {
-    const opt = document.createElement('option');
-    opt.value = value;
-    opt.innerText = `⌨️ ${value.substring(KEY_ACTION_PREFIX.length)}`;
-    select.insertBefore(opt, select.querySelector(`option[value="${CUSTOM_KEY_OPTION}"]`));
-  }
-  return value;
+// Traduit un événement clavier en combinaison (lettres selon leur libellé, chiffres selon leur position)
+const CODE_TO_KEY = {
+  Enter: "Enter", NumpadEnter: "Enter", Escape: "Esc", Tab: "Tab", Space: "Space", Backspace: "Backspace",
+  Delete: "Delete", Insert: "Insert", Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
+  ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", PrintScreen: "PrintScreen", Pause: "Pause"
+};
+function comboFromKeyEvent(e) {
+  if (['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'OS'].includes(e.key)) return null; // attendre la touche principale
+  let key = CODE_TO_KEY[e.code] || null;
+  if (!key && /^Digit[0-9]$/.test(e.code)) key = e.code.slice(5);
+  if (!key && /^Numpad[0-9]$/.test(e.code)) key = e.code.slice(6);
+  if (!key && /^F([1-9]|1[0-9]|2[0-4])$/.test(e.key)) key = e.key;
+  if (!key && e.key && e.key.length === 1 && /[a-z]/i.test(e.key)) key = e.key.toUpperCase();
+  if (!key) return null;
+  const mods = [];
+  if (e.ctrlKey) mods.push("Ctrl");
+  if (e.shiftKey) mods.push("Shift");
+  if (e.altKey) mods.push("Alt");
+  if (e.metaKey) mods.push("Win");
+  return [...mods, key].join('+');
 }
+
+function parseMappingAction(raw) {
+  if (!raw || raw === NATIVE_ACTION) return { kind: 'none' };
+  for (const kind of ['key', 'hold', 'turbo', 'text', 'url']) {
+    if (raw.startsWith(ACTION_PREFIXES[kind])) return { kind, value: raw.substring(ACTION_PREFIXES[kind].length) };
+  }
+  try {
+    if (raw.startsWith(ACTION_PREFIXES.launch)) {
+      const t = JSON.parse(raw.substring(ACTION_PREFIXES.launch.length));
+      return { kind: 'launch', path: t.path || '', args: t.args || '' };
+    }
+    if (raw.startsWith(ACTION_PREFIXES.macro)) {
+      const steps = JSON.parse(raw.substring(ACTION_PREFIXES.macro.length));
+      return { kind: 'macro', steps: Array.isArray(steps) ? steps : [] };
+    }
+  } catch (e) {
+    return { kind: 'none' };
+  }
+  return { kind: 'preset', value: raw };
+}
+
+function serializeMappingAction(a) {
+  switch (a.kind) {
+    case 'preset': return a.value;
+    case 'key': case 'hold': case 'turbo': case 'text': case 'url': return ACTION_PREFIXES[a.kind] + a.value;
+    case 'launch': return ACTION_PREFIXES.launch + JSON.stringify({ path: a.path, args: a.args || '' });
+    case 'macro': return ACTION_PREFIXES.macro + JSON.stringify(a.steps);
+    default: return NATIVE_ACTION;
+  }
+}
+
+function fileNameOf(path) {
+  return String(path || '').split(/[\\/]/).filter(Boolean).pop() || path;
+}
+
+function truncateText(text, max) {
+  const t = String(text || '').replace(/\s+/g, ' ');
+  return t.length > max ? t.slice(0, max - 1) + '…' : t;
+}
+
+function describeAction(raw) {
+  const a = parseMappingAction(raw);
+  switch (a.kind) {
+    case 'preset': return { icon: '⭐', text: a.value };
+    case 'key': return { icon: '⌨️', text: a.value };
+    case 'hold': return { icon: '⏬', text: `Maintenir ${a.value}` };
+    case 'turbo': return { icon: '⚡', text: `Turbo ${a.value}` };
+    case 'text': return { icon: '💬', text: `« ${truncateText(a.value, 28)} »` };
+    case 'url': {
+      let host = a.value;
+      try { host = new URL(a.value).hostname; } catch (e) {}
+      return { icon: '🌐', text: host };
+    }
+    case 'launch': return { icon: '🚀', text: fileNameOf(a.path) };
+    case 'macro': return { icon: '🧩', text: `Macro · ${a.steps.length} étape${a.steps.length > 1 ? 's' : ''}` };
+    default: return { icon: '🎮', text: 'Natif (aucune action)' };
+  }
+}
+
+function isAllowedUrl(url) {
+  try {
+    const u = new URL(String(url).trim());
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch (e) {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------
+// Grille des boutons : tuiles groupées, valeur stockée dans un input caché map-btn-N
+// ---------------------------------------------------------------------
+const BUTTON_GROUPS = [
+  { title: "Boutons principaux", buttons: [0, 1, 2, 3] },
+  { title: "Bumpers & gâchettes", buttons: [4, 5, 6, 7] },
+  { title: "Croix directionnelle", buttons: [12, 13, 14, 15] },
+  { title: "Clics des sticks", buttons: [10, 11] },
+  { title: "Boutons système", buttons: [8, 9, 16, 19] },
+  { title: "Pavé tactile PS5", buttons: [17, 18] }
+];
 
 function initMappingGrid() {
   const container = document.getElementById('mapping-grid');
   container.innerHTML = '';
 
-  for (let i = 0; i < 20; i++) {
-    const tile = document.createElement('div');
-    tile.className = 'bind-tile';
-    tile.id = `map-card-${i}`;
+  BUTTON_GROUPS.forEach(group => {
+    const section = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'bind-group-title';
+    title.textContent = group.title;
+    const grid = document.createElement('div');
+    grid.className = 'bind-group-grid';
 
-    const label = document.createElement('div');
-    label.className = 'bind-label mono';
-    label.innerHTML = `<span>${BUTTON_SHORT[i]}</span><span>#${i}</span>`;
+    group.buttons.forEach(i => {
+      const tile = document.createElement('button');
+      tile.type = 'button';
+      tile.className = 'bind-tile';
+      tile.id = `map-card-${i}`;
+      tile.tabIndex = -1;
+      tile.onclick = () => openActionEditor(i);
 
-    const select = document.createElement('select');
-    select.id = `map-btn-${i}`;
-    select.tabIndex = -1;
-    MAPPING_ACTIONS.forEach(act => {
-      const opt = document.createElement('option');
-      opt.value = act;
-      opt.innerText = act;
-      select.appendChild(opt);
+      const label = document.createElement('div');
+      label.className = 'bind-label mono';
+      const name = document.createElement('span');
+      name.textContent = BUTTON_SHORT[i];
+      const num = document.createElement('span');
+      num.textContent = `B${i}`;
+      label.append(name, num);
+
+      const action = document.createElement('div');
+      action.className = 'bind-action';
+      action.id = `map-action-${i}`;
+
+      const value = document.createElement('input');
+      value.type = 'hidden';
+      value.id = `map-btn-${i}`;
+      value.value = NATIVE_ACTION;
+
+      tile.append(label, action, value);
+      grid.appendChild(tile);
     });
-    const customOpt = document.createElement('option');
-    customOpt.value = CUSTOM_KEY_OPTION;
-    customOpt.innerText = "⌨️ Touche personnalisée…";
-    select.appendChild(customOpt);
 
-    let previousValue = select.value;
-    select.onfocus = () => { previousValue = select.value; };
-    select.onchange = () => {
-      if (select.value === CUSTOM_KEY_OPTION) {
-        const typed = prompt("Raccourci clavier (ex : Ctrl+Shift+S, F5, Alt+Tab, Win+E)", "");
-        const combo = normalizeKeyCombo(typed);
-        if (!combo) {
-          if (typed) alert("Raccourci non reconnu. Utilisez des touches séparées par + (ex : Ctrl+Alt+Suppr, F11, Ctrl+Z).");
-          select.value = previousValue;
-          select.blur();
-          return;
-        }
-        select.value = ensureCustomKeyOption(select, KEY_ACTION_PREFIX + combo);
-      }
-      previousValue = select.value;
-      select.blur();
-      refreshMappingHighlights();
-      saveCurrentProfile(true);
-    };
+    section.append(title, grid);
+    container.appendChild(section);
+  });
 
-    tile.appendChild(label);
-    tile.appendChild(select);
-    container.appendChild(tile);
-  }
+  for (let i = 0; i < 20; i++) renderBindTile(i);
+}
+
+function renderBindTile(i) {
+  const input = document.getElementById(`map-btn-${i}`);
+  const box = document.getElementById(`map-action-${i}`);
+  const tile = document.getElementById(`map-card-${i}`);
+  if (!input || !box || !tile) return;
+  const d = describeAction(input.value);
+  box.innerHTML = '';
+  const icon = document.createElement('span');
+  icon.textContent = d.icon;
+  const text = document.createElement('span');
+  text.className = 'bind-action-text';
+  text.textContent = d.text;
+  box.append(icon, text);
+  tile.title = `${BUTTON_SHORT[i]} (B${i}) : ${d.text} — cliquer pour modifier`;
 }
 
 function refreshMappingHighlights() {
@@ -1671,12 +1938,10 @@ function refreshMappingHighlights() {
     const sel = document.getElementById(`map-btn-${i}`);
     const tile = document.getElementById(`map-card-${i}`);
     if (sel && tile) {
-      if (sel.value !== "Défaut (Native)") {
-        tile.classList.add('active-bind');
-        count++;
-      } else {
-        tile.classList.remove('active-bind');
-      }
+      const mapped = sel.value && sel.value !== NATIVE_ACTION;
+      tile.classList.toggle('active-bind', mapped);
+      if (mapped) count++;
+      renderBindTile(i);
     }
   }
   const lsMode = document.getElementById('ls-mode-select')?.value || 'native';
@@ -1685,6 +1950,566 @@ function refreshMappingHighlights() {
 
   document.getElementById('mapped-count-badge').innerText =
     `${count} touche(s) + ${stickExtra} stick(s) actif(s)`;
+}
+
+async function clearAllMappings() {
+  const ok = await showConfirm({
+    title: "Réinitialiser tous les boutons ?",
+    message: "Les 20 boutons de ce profil reprendront leur comportement natif.",
+    confirmLabel: "Tout réinitialiser",
+    danger: true
+  });
+  if (!ok) return;
+  for (let i = 0; i < 20; i++) document.getElementById(`map-btn-${i}`).value = NATIVE_ACTION;
+  refreshMappingHighlights();
+  saveCurrentProfile(false);
+}
+
+// ---------------------------------------------------------------------
+// Fenêtre de confirmation (remplace confirm() : cohérente avec l'interface)
+// ---------------------------------------------------------------------
+let confirmResolver = null;
+
+function showConfirm({ title, message, confirmLabel = "Confirmer", danger = false }) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-message').textContent = message;
+  const ok = document.getElementById('confirm-ok');
+  ok.textContent = confirmLabel;
+  ok.className = danger ? 'btn ghost-danger' : 'btn primary';
+  document.getElementById('confirm-modal').classList.add('open');
+  setTimeout(() => ok.focus(), 0);
+  return new Promise(resolve => { confirmResolver = resolve; });
+}
+
+function resolveConfirm(value) {
+  document.getElementById('confirm-modal').classList.remove('open');
+  if (confirmResolver) { confirmResolver(value); confirmResolver = null; }
+}
+
+// ---------------------------------------------------------------------
+// Éditeur d'action d'un bouton
+// ---------------------------------------------------------------------
+const ACTION_KINDS = [
+  { id: 'none', icon: '🎮', label: 'Aucune', desc: 'Comportement natif' },
+  { id: 'preset', icon: '⭐', label: 'Action rapide', desc: 'Volume, clics, médias…' },
+  { id: 'key', icon: '⌨️', label: 'Touche / combinaison', desc: 'Ctrl+S, F5, Alt+Tab…' },
+  { id: 'hold', icon: '⏬', label: 'Maintenir', desc: 'Enfoncée tant que tenu' },
+  { id: 'turbo', icon: '⚡', label: 'Turbo', desc: 'Répétée tant que tenu' },
+  { id: 'text', icon: '💬', label: 'Taper du texte', desc: 'Message, signature…' },
+  { id: 'macro', icon: '🧩', label: 'Macro', desc: 'Suite d’étapes' },
+  { id: 'launch', icon: '🚀', label: 'Lancer une appli', desc: 'Programme, raccourci' },
+  { id: 'url', icon: '🌐', label: 'Ouvrir un site', desc: 'Lien web' }
+];
+
+const MACRO_STEP_TYPES = [
+  { id: 'key', label: '⌨️ Touche' },
+  { id: 'text', label: '💬 Texte' },
+  { id: 'delay', label: '⏱️ Pause' },
+  { id: 'action', label: '⭐ Action rapide' },
+  { id: 'launch', label: '🚀 Lancer' },
+  { id: 'url', label: '🌐 Site' }
+];
+
+const QUICK_APPS = [
+  { label: 'Bloc-notes', path: 'notepad.exe' },
+  { label: 'Calculatrice', path: 'calc.exe' },
+  { label: 'Explorateur', path: 'explorer.exe' },
+  { label: 'Gestionnaire des tâches', path: 'taskmgr.exe' }
+];
+
+const PRESET_ACTIONS = () => MAPPING_ACTIONS.filter(a => a !== NATIVE_ACTION);
+
+let actionEditor = null; // { index, draft }
+let pendingFilePick = null; // { requestId, apply(path) }
+
+function openActionEditor(index) {
+  const current = document.getElementById(`map-btn-${index}`).value;
+  actionEditor = { index, draft: parseMappingAction(current) };
+  if (actionEditor.draft.kind === 'macro' && !Array.isArray(actionEditor.draft.steps)) actionEditor.draft.steps = [];
+
+  document.getElementById('action-modal-title').textContent = `Configurer : ${BUTTON_SHORT[index]} (B${index})`;
+  document.getElementById('action-modal-sub').textContent = `Actuellement : ${describeAction(current).text}`;
+  document.getElementById('action-test-status').textContent = '';
+  renderKindPicker();
+  renderEditorPanel();
+  document.getElementById('action-modal').classList.add('open');
+}
+
+function closeActionEditor() {
+  document.getElementById('action-modal').classList.remove('open');
+  actionEditor = null;
+  pendingFilePick = null;
+}
+
+function renderKindPicker() {
+  const picker = document.getElementById('kind-picker');
+  picker.innerHTML = '';
+  ACTION_KINDS.forEach(k => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'kind-option' + (actionEditor.draft.kind === k.id ? ' selected' : '');
+    const b = document.createElement('b');
+    b.textContent = `${k.icon} ${k.label}`;
+    const s = document.createElement('span');
+    s.textContent = k.desc;
+    btn.append(b, s);
+    btn.onclick = () => switchDraftKind(k.id);
+    picker.appendChild(btn);
+  });
+}
+
+// Garde ce qui peut l'être en changeant de type (ex. la combinaison entre Touche, Maintenir et Turbo)
+function switchDraftKind(kind) {
+  const old = actionEditor.draft;
+  const keyLike = ['key', 'hold', 'turbo'];
+  let draft = { kind };
+  if (keyLike.includes(kind) && keyLike.includes(old.kind)) draft.value = old.value;
+  else if (kind === 'preset') draft.value = PRESET_ACTIONS()[0];
+  else if (kind === 'macro') draft.steps = [];
+  else if (kind === 'launch') { draft.path = ''; draft.args = ''; }
+  else if (kind !== 'none') draft.value = '';
+  actionEditor.draft = draft;
+  document.getElementById('action-editor-error').textContent = '';
+  renderKindPicker();
+  renderEditorPanel();
+}
+
+function makeField(labelText, control, hintText) {
+  const field = document.createElement('div');
+  field.className = 'field';
+  if (labelText) {
+    const label = document.createElement('span');
+    label.className = 'field-label';
+    label.textContent = labelText;
+    field.appendChild(label);
+  }
+  field.appendChild(control);
+  if (hintText) {
+    const hint = document.createElement('span');
+    hint.className = 'field-hint';
+    hint.textContent = hintText;
+    field.appendChild(hint);
+  }
+  return field;
+}
+
+function makeTextInput(value, placeholder, onInput) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = value || '';
+  input.placeholder = placeholder || '';
+  input.oninput = () => onInput(input.value);
+  return input;
+}
+
+function makePresetSelect(value, onChange) {
+  const sel = document.createElement('select');
+  PRESET_ACTIONS().forEach(act => {
+    const opt = document.createElement('option');
+    opt.value = act;
+    opt.textContent = act;
+    sel.appendChild(opt);
+  });
+  sel.value = PRESET_ACTIONS().includes(value) ? value : PRESET_ACTIONS()[0];
+  sel.onchange = () => onChange(sel.value);
+  onChange(sel.value);
+  return sel;
+}
+
+const LONE_MODIFIERS = { Control: 'Ctrl', Shift: 'Shift', Alt: 'Alt' };
+
+// Champ qui enregistre la combinaison réellement pressée au clavier
+function makeKeyCapture(value, onChange) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.readOnly = true;
+  input.className = 'key-capture';
+  input.value = value || '';
+  const idle = 'Cliquez ici puis appuyez sur la touche ou la combinaison';
+  input.placeholder = idle;
+  input.onfocus = () => { input.classList.add('listening'); input.placeholder = 'Appuyez sur les touches… (Échap pour annuler)'; };
+  input.onblur = () => { input.classList.remove('listening'); input.placeholder = idle; };
+  let loneModifier = null; // modificateur pressé seul, validé s'il est relâché sans autre touche (ex. Shift)
+  input.onkeydown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Escape' && !e.ctrlKey && !e.shiftKey && !e.altKey) { input.blur(); return; }
+    if (LONE_MODIFIERS[e.key]) { loneModifier = LONE_MODIFIERS[e.key]; return; }
+    loneModifier = null;
+    const combo = comboFromKeyEvent(e);
+    if (combo) { input.value = combo; onChange(combo); }
+  };
+  input.onkeyup = (e) => {
+    const othersHeld = e.ctrlKey || e.shiftKey || e.altKey;
+    if (loneModifier && LONE_MODIFIERS[e.key] === loneModifier && !othersHeld) { input.value = loneModifier; onChange(loneModifier); }
+    loneModifier = null;
+  };
+  return input;
+}
+
+// Capture + saisie manuelle synchronisées (la touche Windows ne peut pas être capturée par la page)
+function makeKeyEditor(value, onChange) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex; flex-direction:column; gap:6px;';
+  let manual;
+  const capture = makeKeyCapture(value, v => { manual.value = v; onChange(v); });
+  manual = makeTextInput(value, 'ou tapez : Ctrl+Shift+S, Win+E, F5…', v => { capture.value = v; onChange(v); });
+  wrap.append(capture, manual);
+  return wrap;
+}
+
+function renderEditorPanel() {
+  const panel = document.getElementById('action-editor-panel');
+  panel.innerHTML = '';
+  const d = actionEditor.draft;
+  const set = (k) => (v) => { d[k] = v; document.getElementById('action-editor-error').textContent = ''; };
+
+  switch (d.kind) {
+    case 'none': {
+      const p = document.createElement('div');
+      p.className = 'empty-hint';
+      p.textContent = 'Le bouton garde son comportement d’origine (dans les jeux, la manette fonctionne normalement).';
+      panel.appendChild(p);
+      break;
+    }
+    case 'preset':
+      panel.appendChild(makeField('Action', makePresetSelect(d.value, set('value')), 'Actions système prêtes à l’emploi : multimédia, souris, fenêtres…'));
+      break;
+
+    case 'key':
+      panel.appendChild(makeField('Touche ou combinaison', makeKeyEditor(d.value, set('value')),
+        'Appui puis relâchement immédiat. Exemples : Ctrl+C, Alt+F4, Ctrl+Shift+Échap, F12.'));
+      break;
+
+    case 'hold':
+      panel.appendChild(makeField('Touche à maintenir', makeKeyEditor(d.value, set('value')),
+        'La touche reste enfoncée tant que le bouton est tenu (ex. Shift pour courir, Ctrl pour s’accroupir).'));
+      break;
+
+    case 'turbo': {
+      const chips = document.createElement('div');
+      chips.className = 'quick-chips';
+      [['🖱️ Clic gauche', 'Clic Gauche Souris'], ['🖱️ Clic droit', 'Clic Droit Souris'], ['␣ Espace', 'Space'], ['↵ Entrée', 'Enter']].forEach(([label, v]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn';
+        b.textContent = label;
+        b.onclick = () => { d.value = v; renderEditorPanel(); };
+        chips.appendChild(b);
+      });
+      panel.appendChild(makeField('Touche ou clic à répéter', makeKeyEditor(d.value, set('value')),'Répétée environ 12 fois par seconde tant que le bouton est tenu.'));
+      panel.appendChild(makeField('Raccourcis', chips));
+      break;
+    }
+
+    case 'text': {
+      const ta = document.createElement('textarea');
+      ta.value = d.value || '';
+      ta.maxLength = MAX_TEXT_LENGTH;
+      ta.placeholder = 'Ex : GG, bien joué ! 👍';
+      ta.oninput = () => set('value')(ta.value);
+      panel.appendChild(makeField('Texte à taper', ta, 'Accents et emoji acceptés. Un retour à la ligne envoie la touche Entrée.'));
+      break;
+    }
+
+    case 'url':
+      panel.appendChild(makeField('Adresse du site', makeTextInput(d.value, 'https://www.twitch.tv/…', set('value')),
+        'Ouvert dans le navigateur par défaut. Seuls les liens http:// et https:// sont acceptés.'));
+      break;
+
+    case 'launch': {
+      const row = document.createElement('div');
+      row.className = 'inline-input';
+      const path = makeTextInput(d.path, 'C:\\Program Files\\…\\app.exe ou notepad.exe', set('path'));
+      const browse = document.createElement('button');
+      browse.type = 'button';
+      browse.className = 'btn';
+      browse.textContent = '📂 Parcourir…';
+      browse.onclick = () => requestFilePick(p => { d.path = p; path.value = p; set('path')(p); });
+      row.append(path, browse);
+
+      const chips = document.createElement('div');
+      chips.className = 'quick-chips';
+      QUICK_APPS.forEach(app => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn';
+        b.textContent = app.label;
+        b.onclick = () => { d.path = app.path; path.value = app.path; set('path')(app.path); };
+        chips.appendChild(b);
+      });
+
+      panel.appendChild(makeField('Programme', row, 'Un .exe, un raccourci .lnk ou un lien d’application (ex. steam://rungameid/730).'));
+      panel.appendChild(makeField('Arguments (facultatif)', makeTextInput(d.args, 'Ex : --fullscreen', set('args'))));
+      panel.appendChild(makeField('Raccourcis', chips));
+      break;
+    }
+
+    case 'macro':
+      renderMacroEditor(panel, d);
+      break;
+  }
+}
+
+// ---------------------------------------------------------------------
+// Éditeur de macro : liste d'étapes réordonnables
+// ---------------------------------------------------------------------
+function newMacroStep(type) {
+  switch (type) {
+    case 'delay': return { type, ms: 200 };
+    case 'action': return { type, value: PRESET_ACTIONS()[0] };
+    case 'launch': return { type, path: '', args: '' };
+    default: return { type, value: '' };
+  }
+}
+
+function renderMacroEditor(panel, d) {
+  const list = document.createElement('div');
+  list.className = 'macro-steps';
+
+  if (d.steps.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-hint';
+    empty.textContent = 'Aucune étape. Ajoutez des touches, du texte, des pauses… elles seront jouées dans l’ordre.';
+    list.appendChild(empty);
+  }
+
+  d.steps.forEach((step, idx) => {
+    const row = document.createElement('div');
+    row.className = 'macro-step';
+
+    const num = document.createElement('span');
+    num.className = 'macro-step-num mono';
+    num.textContent = idx + 1;
+
+    const typeSel = document.createElement('select');
+    MACRO_STEP_TYPES.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.label;
+      typeSel.appendChild(opt);
+    });
+    typeSel.value = step.type;
+    typeSel.onchange = () => { d.steps[idx] = newMacroStep(typeSel.value); renderEditorPanel(); };
+
+    const valueBox = document.createElement('div');
+    valueBox.className = 'macro-step-value';
+    const setStep = (k) => (v) => { step[k] = v; document.getElementById('action-editor-error').textContent = ''; };
+    if (step.type === 'key') valueBox.appendChild(makeKeyCapture(step.value, setStep('value')));
+    else if (step.type === 'text') valueBox.appendChild(makeTextInput(step.value, 'Texte à taper', setStep('value')));
+    else if (step.type === 'url') valueBox.appendChild(makeTextInput(step.value, 'https://…', setStep('value')));
+    else if (step.type === 'action') valueBox.appendChild(makePresetSelect(step.value, setStep('value')));
+    else if (step.type === 'delay') {
+      const ms = document.createElement('input');
+      ms.type = 'text';
+      ms.inputMode = 'numeric';
+      ms.value = step.ms;
+      ms.oninput = () => setStep('ms')(parseInt(ms.value, 10) || 0);
+      const unit = document.createElement('span');
+      unit.className = 'field-hint';
+      unit.style.alignSelf = 'center';
+      unit.textContent = 'ms';
+      valueBox.append(ms, unit);
+    } else if (step.type === 'launch') {
+      const path = makeTextInput(step.path, 'Programme (.exe)', setStep('path'));
+      const browse = document.createElement('button');
+      browse.type = 'button';
+      browse.className = 'icon-btn';
+      browse.title = 'Parcourir…';
+      browse.textContent = '📂';
+      browse.onclick = () => requestFilePick(p => { step.path = p; path.value = p; });
+      valueBox.append(path, browse);
+    }
+
+    const tools = document.createElement('div');
+    tools.className = 'macro-step-tools';
+    const tool = (label, title, disabled, fn, danger) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'icon-btn' + (danger ? ' danger' : '');
+      b.textContent = label;
+      b.title = title;
+      b.disabled = disabled;
+      b.onclick = fn;
+      tools.appendChild(b);
+    };
+    tool('↑', 'Monter', idx === 0, () => { [d.steps[idx - 1], d.steps[idx]] = [d.steps[idx], d.steps[idx - 1]]; renderEditorPanel(); });
+    tool('↓', 'Descendre', idx === d.steps.length - 1, () => { [d.steps[idx + 1], d.steps[idx]] = [d.steps[idx], d.steps[idx + 1]]; renderEditorPanel(); });
+    tool('✕', 'Supprimer l’étape', false, () => { d.steps.splice(idx, 1); renderEditorPanel(); }, true);
+
+    row.append(num, typeSel, valueBox, tools);
+    list.appendChild(row);
+  });
+
+  const adders = document.createElement('div');
+  adders.className = 'quick-chips';
+  MACRO_STEP_TYPES.forEach(t => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn';
+    b.textContent = `+ ${t.label}`;
+    b.disabled = d.steps.length >= MAX_MACRO_STEPS;
+    b.onclick = () => { d.steps.push(newMacroStep(t.id)); renderEditorPanel(); };
+    adders.appendChild(b);
+  });
+
+  panel.appendChild(makeField(`Étapes (${d.steps.length} / ${MAX_MACRO_STEPS})`, list,
+    'Exemple « copier vers Discord » : Ctrl+C → Pause 100 ms → Alt+Tab → Pause 300 ms → Ctrl+V → Entrée.'));
+  panel.appendChild(makeField('Ajouter une étape', adders));
+}
+
+// ---------------------------------------------------------------------
+// Validation, enregistrement, test
+// ---------------------------------------------------------------------
+// Renvoie la chaîne à stocker, ou lève une erreur lisible
+function validateDraft(d) {
+  switch (d.kind) {
+    case 'none':
+      return NATIVE_ACTION;
+    case 'preset':
+      if (!PRESET_ACTIONS().includes(d.value)) throw new Error('Choisissez une action.');
+      return serializeMappingAction(d);
+    case 'key':
+    case 'hold': {
+      const combo = normalizeKeyCombo(d.value);
+      if (!combo) throw new Error('Touche non reconnue. Cliquez dans le champ et appuyez sur la combinaison, ou tapez-la (ex : Ctrl+Shift+S).');
+      return serializeMappingAction({ kind: d.kind, value: combo });
+    }
+    case 'turbo': {
+      if (PRESET_ACTIONS().includes(d.value)) return serializeMappingAction(d);
+      const combo = normalizeKeyCombo(d.value);
+      if (!combo) throw new Error('Choisissez une touche ou un clic à répéter.');
+      return serializeMappingAction({ kind: 'turbo', value: combo });
+    }
+    case 'text':
+      if (!d.value || !d.value.length) throw new Error('Saisissez le texte à taper.');
+      return serializeMappingAction(d);
+    case 'url':
+      if (!isAllowedUrl(d.value)) throw new Error('Adresse invalide : elle doit commencer par https:// (ou http://).');
+      return serializeMappingAction({ kind: 'url', value: d.value.trim() });
+    case 'launch':
+      if (!d.path || !d.path.trim()) throw new Error('Indiquez le programme à lancer (bouton « Parcourir… »).');
+      return serializeMappingAction({ kind: 'launch', path: d.path.trim(), args: (d.args || '').trim() });
+    case 'macro': {
+      if (!d.steps.length) throw new Error('Ajoutez au moins une étape à la macro.');
+      const steps = d.steps.map((s, i) => {
+        const n = i + 1;
+        switch (s.type) {
+          case 'key': {
+            const combo = normalizeKeyCombo(s.value);
+            if (!combo) throw new Error(`Étape ${n} : touche non reconnue.`);
+            return { type: 'key', value: combo };
+          }
+          case 'text':
+            if (!s.value) throw new Error(`Étape ${n} : texte vide.`);
+            return { type: 'text', value: s.value };
+          case 'delay':
+            if (!(s.ms >= 1 && s.ms <= MAX_DELAY_MS)) throw new Error(`Étape ${n} : la pause doit être entre 1 et ${MAX_DELAY_MS} ms.`);
+            return { type: 'delay', ms: s.ms };
+          case 'action':
+            return { type: 'action', value: s.value };
+          case 'launch':
+            if (!s.path || !s.path.trim()) throw new Error(`Étape ${n} : programme manquant.`);
+            return { type: 'launch', path: s.path.trim(), args: s.args || '' };
+          case 'url':
+            if (!isAllowedUrl(s.value)) throw new Error(`Étape ${n} : adresse invalide (https://…).`);
+            return { type: 'url', value: s.value.trim() };
+          default:
+            throw new Error(`Étape ${n} : type inconnu.`);
+        }
+      });
+      return serializeMappingAction({ kind: 'macro', steps });
+    }
+  }
+  return NATIVE_ACTION;
+}
+
+function saveEditedAction() {
+  if (!actionEditor) return;
+  let value;
+  try {
+    value = validateDraft(actionEditor.draft);
+  } catch (err) {
+    document.getElementById('action-editor-error').textContent = err.message;
+    return;
+  }
+  const index = actionEditor.index;
+  document.getElementById(`map-btn-${index}`).value = value;
+  closeActionEditor();
+  refreshMappingHighlights();
+  saveCurrentProfile(true);
+  logEvent(`B${index} (${BUTTON_SHORT[index]}) → ${describeAction(value).text}`, 'ok');
+}
+
+let testCountdownTimer = null;
+
+function testEditedAction() {
+  if (!actionEditor) return;
+  const status = document.getElementById('action-test-status');
+  let value;
+  try {
+    value = validateDraft(actionEditor.draft);
+  } catch (err) {
+    document.getElementById('action-editor-error').textContent = err.message;
+    return;
+  }
+  if (value === NATIVE_ACTION) { status.textContent = 'Rien à tester.'; return; }
+  if (!(window.chrome && window.chrome.webview)) { status.textContent = 'Test disponible uniquement dans l’application.'; return; }
+
+  sendToHost({ action: 'testMappingAction', value, delayMs: 3000 });
+  let left = 3;
+  clearInterval(testCountdownTimer);
+  status.textContent = `Exécution dans ${left} s… cliquez dans l’appli cible`;
+  testCountdownTimer = setInterval(() => {
+    left--;
+    status.textContent = left > 0 ? `Exécution dans ${left} s… cliquez dans l’appli cible` : '✓ Action exécutée';
+    if (left <= 0) clearInterval(testCountdownTimer);
+  }, 1000);
+}
+
+// « Parcourir… » : boîte de dialogue Windows ouverte par le C# (le navigateur ne donne pas le chemin complet)
+function requestFilePick(apply) {
+  if (!(window.chrome && window.chrome.webview)) {
+    document.getElementById('action-editor-error').textContent = 'Parcourir est disponible uniquement dans l’application : saisissez le chemin.';
+    return;
+  }
+  const requestId = String(Date.now());
+  pendingFilePick = { requestId, apply };
+  sendToHost({ action: 'browseExecutable', requestId });
+}
+
+function onFilePicked(data) {
+  if (pendingFilePick && data.requestId === pendingFilePick.requestId && data.path) {
+    pendingFilePick.apply(data.path);
+    document.getElementById('action-editor-error').textContent = '';
+  }
+  pendingFilePick = null;
+}
+
+// Échap ferme la fenêtre du dessus ; Entrée valide la confirmation
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('confirm-modal').classList.contains('open')) { e.preventDefault(); resolveConfirm(false); }
+    else if (document.getElementById('action-modal').classList.contains('open') && !document.activeElement?.classList.contains('key-capture')) { e.preventDefault(); closeActionEditor(); }
+  }
+});
+
+// Actions d'un profil importé qui lancent un programme ou ouvrent un lien : à confirmer avant de les accepter
+function listExternalActions(profileList) {
+  const found = [];
+  profileList.forEach(p => {
+    Object.entries(p.buttonMapping || {}).forEach(([btn, raw]) => {
+      const a = parseMappingAction(raw);
+      const label = `${p.name || 'Profil'} · ${BUTTON_SHORT[+btn] || 'B' + btn}`;
+      if (a.kind === 'launch') found.push(`🚀 ${label} : ${a.path}`);
+      if (a.kind === 'url') found.push(`🌐 ${label} : ${a.value}`);
+      if (a.kind === 'macro') (a.steps || []).forEach(s => {
+        if (s.type === 'launch') found.push(`🧩 ${label} : lance ${s.path}`);
+        if (s.type === 'url') found.push(`🧩 ${label} : ouvre ${s.value}`);
+      });
+    });
+  });
+  return found;
 }
 
 function initProfiles() {
@@ -1786,8 +2611,7 @@ function loadProfileByIndex(idx, notifyBackend = true) {
     const sel = document.getElementById(`map-btn-${i}`);
     if (sel) {
       const mapped = (p.buttonMapping && p.buttonMapping[String(i)]) ? p.buttonMapping[String(i)] : "Défaut (Native)";
-      // Un raccourci personnalisé n'existe pas dans la liste fixe : on ajoute son option avant de le sélectionner
-      sel.value = mapped.startsWith(KEY_ACTION_PREFIX) ? ensureCustomKeyOption(sel, mapped) : mapped;
+      sel.value = mapped;
     }
   }
 
@@ -1882,8 +2706,18 @@ function createNewProfile() {
   saveCurrentProfile(false);
 }
 
-function deleteCurrentProfile() {
-  if (profiles.length <= 1) return;
+async function deleteCurrentProfile() {
+  if (profiles.length <= 1) {
+    await showConfirm({ title: "Impossible de supprimer", message: "Il faut garder au moins un profil.", confirmLabel: "Compris" });
+    return;
+  }
+  const ok = await showConfirm({
+    title: "Supprimer ce profil ?",
+    message: `« ${profiles[activeProfileIdx].name} » et tous ses raccourcis seront supprimés définitivement.`,
+    confirmLabel: "Supprimer",
+    danger: true
+  });
+  if (!ok) return;
   profiles.splice(activeProfileIdx, 1);
   activeProfileIdx = 0;
   localStorage.setItem('gp_profiles', JSON.stringify(profiles));
@@ -1891,8 +2725,17 @@ function deleteCurrentProfile() {
   sendToHost({ action: "syncProfiles", profiles, activeProfileId: profiles[0].id, activeProfileName: profiles[0].name });
 }
 
-function applyPreset(type) {
-  for (let i = 0; i < 20; i++) document.getElementById(`map-btn-${i}`).value = "Défaut (Native)";
+async function applyPreset(type) {
+  const mappedCount = [...Array(20).keys()].filter(i => document.getElementById(`map-btn-${i}`).value !== NATIVE_ACTION).length;
+  if (mappedCount > 0) {
+    const ok = await showConfirm({
+      title: "Remplacer les raccourcis ?",
+      message: `Ce preset remplace les ${mappedCount} raccourci(s) actuels de ce profil ainsi que le réglage des sticks.`,
+      confirmLabel: "Appliquer le preset"
+    });
+    if (!ok) return;
+  }
+  for (let i = 0; i < 20; i++) document.getElementById(`map-btn-${i}`).value = NATIVE_ACTION;
   document.getElementById('ls-mode-select').value = "native";
   document.getElementById('rs-mode-select').value = "native";
   document.getElementById('l2-mode-select').value = "off";
@@ -2262,7 +3105,7 @@ function stopRumble() {
 
 async function connectWebHID() {
   if (!navigator.hid) {
-    alert("WebHID n'est pas supporté sur ce navigateur.");
+    showConfirm({ title: "WebHID indisponible", message: "Ce navigateur ne prend pas en charge WebHID : utilisez Edge ou Chrome, ou l’application.", confirmLabel: "Compris" });
     return;
   }
   try {
@@ -2299,10 +3142,22 @@ function importProfilesFile(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  event.target.value = ''; // permet de réimporter le même fichier
+  reader.onload = async (e) => {
     try {
       const imported = JSON.parse(e.target.result);
       if (Array.isArray(imported) && imported.length > 0) {
+        // Un profil reçu d'un tiers peut lancer des programmes : on les montre avant d'accepter
+        const external = listExternalActions(imported);
+        const ok = await showConfirm({
+          title: `Importer ${imported.length} profil(s) ?`,
+          message: (external.length
+            ? `⚠️ Ces profils lancent des programmes ou ouvrent des liens :\n\n${external.slice(0, 12).join('\n')}${external.length > 12 ? `\n… et ${external.length - 12} autre(s)` : ''}\n\nN’importez que des fichiers de confiance.\n\n`
+            : '') + 'Vos profils actuels seront remplacés.',
+          confirmLabel: "Importer",
+          danger: external.length > 0
+        });
+        if (!ok) return;
         profiles = ensureProfileIds(imported);
         localStorage.setItem('gp_profiles', JSON.stringify(profiles));
         loadProfileByIndex(0, true);
@@ -2310,7 +3165,7 @@ function importProfilesFile(event) {
         logEvent(`${imported.length} profil(s) importé(s) avec succès.`, "ok");
       }
     } catch (err) {
-      alert("Fichier JSON invalide.");
+      showConfirm({ title: "Import impossible", message: "Ce fichier n’est pas un export de profils valide (JSON).", confirmLabel: "Compris" });
     }
   };
   reader.readAsText(file);
@@ -2445,6 +3300,9 @@ if (window.chrome && window.chrome.webview) {
         document.getElementById('gp-vidpid').innerText = `ACTIF: PONT DIRECT C# HID (${data.mode}) • Raccourcis pausés pendant le test`;
         renderControllerTelemetry(data.lx || 0, data.ly || 0, data.rx || 0, data.ry || 0, data.l2 || 0, data.r2 || 0, data.buttons || []);
       }
+    }
+    else if (data.type === 'filePicked') {
+      onFilePicked(data);
     }
     else if (data.type === 'selectControllerFromTray') {
       onSelectControllerSlot(data.index, true);

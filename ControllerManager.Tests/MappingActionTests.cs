@@ -11,7 +11,7 @@ namespace ControllerManager.Tests
         [InlineData("Défaut (Native)")]
         [InlineData("Touche:")]
         [InlineData("Touche:A+B")]
-        [InlineData("Maintenir:Ctrl")]
+        [InlineData("Maintenir:Ctrl+Alt")]
         [InlineData("Texte:")]
         [InlineData("Lancer:{}")]
         [InlineData("Lancer:pas du json")]
@@ -112,6 +112,28 @@ namespace ControllerManager.Tests
             var steps = string.Join(",", Enumerable.Repeat("{\"type\":\"key\",\"value\":\"A\"}", 200));
             var a = MappingAction.Parse($"Macro:[{steps}]");
             Assert.Equal(MappingAction.MaxMacroSteps, a.Steps.Count);
+        }
+
+        // Chaînes produites telles quelles par l'éditeur de UI/index.html (serializeMappingAction)
+        [Theory]
+        [InlineData("Touche:Ctrl+Shift+S", MappingKind.KeyTap)]
+        [InlineData("Maintenir:Shift", MappingKind.KeyHold)]
+        [InlineData("Turbo:Clic Gauche Souris", MappingKind.Turbo)]
+        [InlineData("URL:https://www.twitch.tv/directory", MappingKind.Url)]
+        [InlineData("Lancer:{\"path\":\"notepad.exe\",\"args\":\"\"}", MappingKind.Launch)]
+        public void StringsProducedByUi_AreUnderstood(string raw, MappingKind kind)
+        {
+            Assert.Equal(kind, MappingAction.Parse(raw).Kind);
+        }
+
+        [Fact]
+        public void MacroProducedByUi_KeepsAllSteps()
+        {
+            const string raw = "Macro:[{\"type\":\"key\",\"value\":\"Ctrl+C\"},{\"type\":\"text\",\"value\":\"Salut à tous 👋\"},{\"type\":\"delay\",\"ms\":200},{\"type\":\"launch\",\"path\":\"notepad.exe\",\"args\":\"\"}]";
+            var a = MappingAction.Parse(raw);
+            Assert.Equal(MappingKind.Macro, a.Kind);
+            Assert.Equal(4, a.Steps.Count);
+            Assert.Equal("Salut à tous 👋", a.Steps[1].Value);
         }
 
         [Fact]
