@@ -10,6 +10,7 @@ namespace ControllerManager
             if (matched == null) return;
 
             bool changed = _currentProfileId != matched.id;
+            if (changed) _actionRunner.ReleaseAll(); // les touches maintenues du profil précédent ne doivent pas survivre
             _currentProfileId = matched.id;
 
             ApplyActiveProfileHardwareEffects();

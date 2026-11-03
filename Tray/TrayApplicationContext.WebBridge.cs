@@ -57,6 +57,36 @@ namespace ControllerManager
                     bool includeSteam = root.TryGetProperty("includeSteam", out var sProp) && sProp.GetBoolean();
                     KillConflictingApps(includeSteam);
                 }
+                else if (action == "testMappingAction")
+                {
+                    // Bouton « Tester » de l'éditeur : délai pour laisser l'utilisateur cliquer dans l'appli cible
+                    var testAction = MappingAction.Parse(OptString(root, "value"));
+                    int delayMs = root.TryGetProperty("delayMs", out var d) && d.ValueKind == JsonValueKind.Number
+                        ? Math.Clamp(d.GetInt32(), 0, 10_000) : 3000;
+                    if (testAction.Kind != MappingKind.None)
+                    {
+                        Log.Info($"Test d'action demandé : {testAction.Kind}");
+                        Task.Run(async () =>
+                        {
+                            await Task.Delay(delayMs);
+                            _actionRunner.Press("test", testAction);
+                            // Maintien / turbo : on simule un appui d'une seconde
+                            if (testAction.NeedsRelease) await Task.Delay(1000);
+                            _actionRunner.Release("test");
+                        });
+                    }
+                }
+                else if (action == "browseExecutable")
+                {
+                    using var dialog = new OpenFileDialog
+                    {
+                        Title = "Choisir l'application à lancer",
+                        Filter = "Applications et raccourcis (*.exe;*.lnk;*.bat;*.cmd)|*.exe;*.lnk;*.bat;*.cmd|Tous les fichiers (*.*)|*.*",
+                        CheckFileExists = true
+                    };
+                    if (dialog.ShowDialog(_dashboardForm) == DialogResult.OK)
+                        SendToWebView(new { type = "filePicked", requestId = OptString(root, "requestId") ?? "", path = dialog.FileName });
+                }
                 else if (action == "openWinTool")
                 {
                     // Liste blanche : la page ne doit jamais pouvoir lancer un programme arbitraire

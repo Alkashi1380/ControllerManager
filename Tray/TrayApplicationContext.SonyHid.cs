@@ -378,7 +378,11 @@ namespace ControllerManager
                                 _muteLedActive = !_muteLedActive;
                                 ApplyActiveProfileHardwareEffects();
                             }
-                            ExecuteMapping(i);
+                            ExecuteMapping(i, SourceSony);
+                        }
+                        else if (!cur[i] && _prevSonyButtons[i])
+                        {
+                            ReleaseMapping(i, SourceSony);
                         }
                         _prevSonyButtons[i] = cur[i];
                     }

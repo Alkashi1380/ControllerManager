@@ -97,6 +97,91 @@ namespace ControllerManager
         }
 
         public const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
+        public const uint KEYEVENTF_UNICODE = 0x0004;
+        private const uint INPUT_KEYBOARD = 1;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KEYBDINPUT
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        // L'union doit avoir la taille de MOUSEINPUT (le plus grand membre) pour que sizeof(INPUT) soit correct
+        [StructLayout(LayoutKind.Explicit)]
+        private struct InputUnion
+        {
+            [FieldOffset(0)] public KEYBDINPUT ki;
+            [FieldOffset(0)] private MouseInputPadding mi;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MouseInputPadding
+        {
+            public int dx, dy;
+            public uint mouseData, dwFlags, time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct INPUT
+        {
+            public uint type;
+            public InputUnion U;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+        // Exposé pour les tests : Windows rejette SendInput si la taille ne vaut pas 40 (x64) / 28 (x86)
+        public static int InputStructSize => Marshal.SizeOf<INPUT>();
+
+        // Tape un texte quelconque (accents, emoji…) indépendamment de la disposition du clavier
+        public static void SendUnicodeText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+
+            var inputs = new List<INPUT>(text.Length * 2);
+            foreach (char ch in text.Replace("\r\n", "\n"))
+            {
+                if (ch == '\n')
+                {
+                    TapKey(0x0D); // Entrée : le caractère \n seul n'est pas interprété par toutes les applis
+                    continue;
+                }
+                inputs.Add(UnicodeInput(ch, false));
+                inputs.Add(UnicodeInput(ch, true));
+            }
+            if (inputs.Count > 0)
+                SendInput((uint)inputs.Count, inputs.ToArray(), InputStructSize);
+        }
+
+        private static INPUT UnicodeInput(char ch, bool keyUp) => new()
+        {
+            type = INPUT_KEYBOARD,
+            U = new InputUnion
+            {
+                ki = new KEYBDINPUT { wScan = ch, dwFlags = KEYEVENTF_UNICODE | (keyUp ? KEYEVENTF_KEYUP : 0) }
+            }
+        };
+
+        // Maintien d'une combinaison (action « Maintenir ») : modificateurs puis touche, relâchés en ordre inverse
+        public static void PressKeyCombo(KeyCombo combo)
+        {
+            foreach (var mod in combo.Modifiers)
+                keybd_event(mod, 0, KeyFlags(mod), 0);
+            keybd_event(combo.Key, 0, KeyFlags(combo.Key), 0);
+        }
+
+        public static void ReleaseKeyCombo(KeyCombo combo)
+        {
+            keybd_event(combo.Key, 0, KeyFlags(combo.Key) | KEYEVENTF_KEYUP, 0);
+            for (int i = combo.Modifiers.Count - 1; i >= 0; i--)
+                keybd_event(combo.Modifiers[i], 0, KeyFlags(combo.Modifiers[i]) | KEYEVENTF_KEYUP, 0);
+        }
 
         // Modificateurs enfoncés dans l'ordre, touche tapée, puis modificateurs relâchés dans l'ordre inverse
         public static void SendKeyCombo(KeyCombo combo)

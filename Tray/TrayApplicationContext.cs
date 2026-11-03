@@ -360,6 +360,7 @@ namespace ControllerManager
             _mappingToggleMenuItem.Text = _mappingEnabled
                 ? "⌨️ Raccourcis & Sticks : Actifs"
                 : "🔇 Raccourcis & Sticks : En Pause (Mode Test)";
+            if (!_mappingEnabled) _actionRunner.ReleaseAll(); // pas de touche maintenue ni de turbo pendant la pause
             UpdateTrayIcon();
         }
 
@@ -680,6 +681,7 @@ namespace ControllerManager
 
                 bool isSelf = pid == (uint)Environment.ProcessId;
                 _isDashboardFocused = isSelf;
+                if (isSelf) _actionRunner.ReleaseAll(); // le dashboard en avant : plus aucune action ne doit agir
                 if (isSelf) return;
 
                 if (!_autoSwitchEnabled)
@@ -752,6 +754,7 @@ namespace ControllerManager
         protected override void ExitThreadCore()
         {
             _backgroundTimer.Stop();
+            _actionRunner.ReleaseAll();
             if (_foregroundHook != IntPtr.Zero)
             {
                 UnhookWinEvent(_foregroundHook);

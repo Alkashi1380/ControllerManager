@@ -282,7 +282,9 @@ namespace ControllerManager
             bool isPressed = (current & flag) != 0;
             bool wasPressed = (_prevButtons & flag) != 0;
             if (isPressed && !wasPressed)
-                ExecuteMapping(jsIndex);
+                ExecuteMapping(jsIndex, SourceXbox);
+            else if (!isPressed && wasPressed)
+                ReleaseMapping(jsIndex, SourceXbox);
         }
 
         private void CheckTrigger(double currentValue, ref double prevValue, int jsIndex)
@@ -290,25 +292,38 @@ namespace ControllerManager
             bool isPressed = currentValue > 0.5;
             bool wasPressed = prevValue > 0.5;
             if (isPressed && !wasPressed)
-                ExecuteMapping(jsIndex);
+                ExecuteMapping(jsIndex, SourceXbox);
+            else if (!isPressed && wasPressed)
+                ReleaseMapping(jsIndex, SourceXbox);
             prevValue = currentValue;
         }
 
-        private void ExecuteMapping(int jsIndex)
+        private readonly ActionRunner _actionRunner = new();
+
+        private static string ButtonKey(int jsIndex, int source) => $"{source}:{jsIndex}";
+
+        private void ExecuteMapping(int jsIndex, int source)
         {
             if (!_mappingEnabled || _isDashboardFocused)
                 return;
 
             var activeProfile = GetActiveProfile();
+            if (activeProfile?.buttonMapping == null ||
+                !activeProfile.buttonMapping.TryGetValue(jsIndex.ToString(), out string? raw))
+                return;
 
-            if (activeProfile != null &&
-                activeProfile.buttonMapping != null &&
-                activeProfile.buttonMapping.TryGetValue(jsIndex.ToString(), out string? action) &&
-                !string.IsNullOrEmpty(action) &&
-                action != "Défaut (Native)")
-            {
-                VirtualInput.ExecuteAction(action);
-            }
+            var action = MappingAction.Parse(raw);
+            if (action.Kind == MappingKind.None) return;
+
+            try { _actionRunner.Press(ButtonKey(jsIndex, source), action); }
+            catch (Exception ex) { Log.Warn($"Action du bouton B{jsIndex} impossible", ex); }
+        }
+
+        // Toujours traité, même en pause : une touche « maintenue » ne doit jamais rester bloquée
+        private void ReleaseMapping(int jsIndex, int source)
+        {
+            try { _actionRunner.Release(ButtonKey(jsIndex, source)); }
+            catch (Exception ex) { Log.Warn($"Relâchement du bouton B{jsIndex} impossible", ex); }
         }
     }
 }
