@@ -132,6 +132,8 @@ namespace ControllerManager
                 }
                 else if (action == "syncProfiles")
                 {
+                    // Un réglage modifié (mode de stick, raccourci…) ne doit pas laisser une touche enfoncée
+                    _actionRunner.ReleaseAll();
                     string rawProfiles = root.GetProperty("profiles").GetRawText();
                     Directory.CreateDirectory(AppDataDir);
                     File.WriteAllText(ProfilesFilePath, rawProfiles);

@@ -45,7 +45,7 @@ namespace ControllerManager
                     return;
 
                 case MappingKind.Launch:
-                    Task.Run(() => LaunchProgram(action.Launch!.Path, action.Launch.Args));
+                    RequestLaunch(action.Launch!, MappingAction.LaunchPrefix + action.Payload);
                     return;
 
                 case MappingKind.Url:
@@ -126,7 +126,7 @@ namespace ControllerManager
             }
         }
 
-        private static async Task RunMacro(IReadOnlyList<MacroStep> steps, CancellationToken ct)
+        private async Task RunMacro(IReadOnlyList<MacroStep> steps, CancellationToken ct)
         {
             foreach (var step in steps)
             {
@@ -146,7 +146,8 @@ namespace ControllerManager
                         VirtualInput.ExecuteAction(step.Value);
                         break;
                     case "launch":
-                        LaunchProgram(step.Path, step.Args);
+                        // Étape de macro : profil choisi automatiquement (profil associé à l'exe, sinon inchangé)
+                        RequestLaunch(new LaunchTarget { Path = step.Path, Args = step.Args }, rawAction: null);
                         break;
                     case "url":
                         OpenUrl(step.Value);
@@ -155,6 +156,16 @@ namespace ControllerManager
                 // Petit délai entre deux étapes : certaines applis perdent des touches envoyées trop vite
                 await Task.Delay(15, ct);
             }
+        }
+
+        // Fourni par l'appli : choisit le profil manette (éventuellement via une fenêtre) puis lance le programme.
+        // rawAction = chaîne d'origine du raccourci, pour y mémoriser le choix ; null pour une étape de macro.
+        public Action<LaunchTarget, string?>? LaunchHandler { get; set; }
+
+        private void RequestLaunch(LaunchTarget target, string? rawAction)
+        {
+            if (LaunchHandler != null) LaunchHandler(target, rawAction);
+            else Task.Run(() => LaunchProgram(target.Path, target.Args));
         }
 
         public static void LaunchProgram(string path, string args)

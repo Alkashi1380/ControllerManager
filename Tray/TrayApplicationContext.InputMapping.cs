@@ -204,24 +204,75 @@ namespace ControllerManager
             _prevTouch2 = t2Active;
         }
 
+        private const int StickLeft = 0, StickRight = 1;
+
+        // [manette][stick] : directions du mode « actions »
+        private readonly StickDirectionTracker[][] _stickDirections =
+        {
+            new[] { new StickDirectionTracker(), new StickDirectionTracker() },
+            new[] { new StickDirectionTracker(), new StickDirectionTracker() }
+        };
+
         private void ProcessAnalogSticksMapping(float lx, float ly, float rx, float ry, int source)
         {
             if (!_mappingEnabled || _isDashboardFocused)
+            {
+                ReleaseStickOutputs(source); // aucune touche de stick ne doit rester enfoncée pendant la pause
                 return;
+            }
 
             var prof = GetActiveProfile();
             if (prof == null) return;
 
-            double dz = prof.deadzone > 0.01 ? prof.deadzone : 0.08;
-            double sens = prof.mouseSensitivity > 1 ? prof.mouseSensitivity : 14.0;
-
-            ApplySingleStickAction(prof.leftStickMode, lx, ly, dz, sens, isLeftStick: true, source);
-            ApplySingleStickAction(prof.rightStickMode, rx, ry, dz, sens, isLeftStick: false, source);
+            ApplySingleStickAction(prof.leftStick ?? LegacyStick(prof, prof.leftStickMode), lx, ly, StickLeft, source);
+            ApplySingleStickAction(prof.rightStick ?? LegacyStick(prof, prof.rightStickMode), rx, ry, StickRight, source);
         }
 
-        private void ApplySingleStickAction(string mode, float x, float y, double dz, double sens, bool isLeftStick, int source)
+        private static StickSettings LegacyStick(GamepadProfile p, string mode) =>
+            new() { mode = mode, sensitivity = p.mouseSensitivity, deadzone = p.deadzone };
+
+        private static string StickButtonKey(int source, int stick, int direction) =>
+            $"{source}:{(stick == StickLeft ? "LS" : "RS")}:{StickDirectionTracker.Names[direction]}";
+
+        // Relâche touches ZQSD/flèches et actions directionnelles d'une manette (pause, dashboard, changement de mode)
+        private void ReleaseStickOutputs(int source)
         {
+            var states = _stickKeyStates[source];
+            for (int i = 0; i < states.Length; i++)
+            {
+                if (!states[i]) continue;
+                int k = i % 8;
+                if (k < 4) VirtualInput.SetScanKeyState(new[] { VirtualInput.SCAN_W, VirtualInput.SCAN_S, VirtualInput.SCAN_A, VirtualInput.SCAN_D }[k], false, ref states[i]);
+                else VirtualInput.SetKeyState(new[] { VirtualInput.VK_UP, VirtualInput.VK_DOWN, VirtualInput.VK_LEFT, VirtualInput.VK_RIGHT }[k - 4], false, ref states[i]);
+            }
+            for (int stick = 0; stick < 2; stick++)
+                foreach (int d in _stickDirections[source][stick].ReleaseAll())
+                    ReleaseMapping(StickButtonKey(source, stick, d));
+        }
+
+        private void ApplySingleStickAction(StickSettings s, float x, float y, int stick, int source)
+        {
+            string mode = s.mode;
             if (string.IsNullOrEmpty(mode) || mode == "native") return;
+
+            double dz = s.deadzone >= 0.01 && s.deadzone <= 0.5 ? s.deadzone : 0.08;
+            double sens = s.sensitivity > 1 ? s.sensitivity : 14.0;
+            if (s.invertY) y = -y;
+            int keyBase = stick * 8; // chaque stick a ses propres touches ZQSD / flèches
+
+            if (mode == "actions")
+            {
+                var tracker = _stickDirections[source][stick];
+                foreach (var (direction, pressed) in tracker.Update(x, y, dz))
+                {
+                    string key = StickButtonKey(source, stick, direction);
+                    if (pressed)
+                        PressMappingAction(key, s.directions.GetValueOrDefault(StickDirectionTracker.Names[direction]));
+                    else
+                        ReleaseMapping(key);
+                }
+                return;
+            }
 
             double mag = Math.Sqrt(x * x + y * y);
             float fx = mag > dz ? x : 0f;
@@ -250,27 +301,29 @@ namespace ControllerManager
             }
             else if (mode == "scroll")
             {
-                if (_scrollCooldown[source] > 0) _scrollCooldown[source]--;
-                if (Math.Abs(fy) > 0.25f && _scrollCooldown[source] <= 0)
+                int cd = source * 2 + stick; // délai propre à chaque stick de chaque manette
+                if (_scrollCooldown[cd] > 0) _scrollCooldown[cd]--;
+                if (Math.Abs(fy) > 0.25f && _scrollCooldown[cd] <= 0)
                 {
-                    int wheel = (int)(-fy * 90);
+                    // Vitesse 14 = comportement historique (90 unités de molette par cran)
+                    int wheel = (int)(-fy * 90 * (sens / 14.0));
                     VirtualInput.ScrollMouseWheel(wheel);
-                    _scrollCooldown[source] = 3;
+                    _scrollCooldown[cd] = 3;
                 }
             }
-            else if (mode == "wasd" && isLeftStick)
+            else if (mode == "wasd")
             {
-                VirtualInput.SetScanKeyState(VirtualInput.SCAN_W, fy < -0.4f, ref _stickKeyStates[source][0]);
-                VirtualInput.SetScanKeyState(VirtualInput.SCAN_S, fy > 0.4f, ref _stickKeyStates[source][1]);
-                VirtualInput.SetScanKeyState(VirtualInput.SCAN_A, fx < -0.4f, ref _stickKeyStates[source][2]);
-                VirtualInput.SetScanKeyState(VirtualInput.SCAN_D, fx > 0.4f, ref _stickKeyStates[source][3]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_W, fy < -0.4f, ref _stickKeyStates[source][keyBase + 0]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_S, fy > 0.4f, ref _stickKeyStates[source][keyBase + 1]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_A, fx < -0.4f, ref _stickKeyStates[source][keyBase + 2]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_D, fx > 0.4f, ref _stickKeyStates[source][keyBase + 3]);
             }
             else if (mode == "arrows")
             {
-                VirtualInput.SetKeyState(VirtualInput.VK_UP, fy < -0.4f, ref _stickKeyStates[source][4]);
-                VirtualInput.SetKeyState(VirtualInput.VK_DOWN, fy > 0.4f, ref _stickKeyStates[source][5]);
-                VirtualInput.SetKeyState(VirtualInput.VK_LEFT, fx < -0.4f, ref _stickKeyStates[source][6]);
-                VirtualInput.SetKeyState(VirtualInput.VK_RIGHT, fx > 0.4f, ref _stickKeyStates[source][7]);
+                VirtualInput.SetKeyState(VirtualInput.VK_UP, fy < -0.4f, ref _stickKeyStates[source][keyBase + 4]);
+                VirtualInput.SetKeyState(VirtualInput.VK_DOWN, fy > 0.4f, ref _stickKeyStates[source][keyBase + 5]);
+                VirtualInput.SetKeyState(VirtualInput.VK_LEFT, fx < -0.4f, ref _stickKeyStates[source][keyBase + 6]);
+                VirtualInput.SetKeyState(VirtualInput.VK_RIGHT, fx > 0.4f, ref _stickKeyStates[source][keyBase + 7]);
             }
         }
 
@@ -307,23 +360,34 @@ namespace ControllerManager
             if (!_mappingEnabled || _isDashboardFocused)
                 return;
 
+            // Sélecteur de profil ouvert (lancement d'appli) : la manette le pilote au lieu de déclencher ses actions
+            if (TryRouteToProfileChooser(jsIndex)) return;
+
             var activeProfile = GetActiveProfile();
             if (activeProfile?.buttonMapping == null ||
                 !activeProfile.buttonMapping.TryGetValue(jsIndex.ToString(), out string? raw))
                 return;
 
+            PressMappingAction(ButtonKey(jsIndex, source), raw);
+        }
+
+        // Commun aux boutons et aux directions de stick : même format d'action, même exécuteur
+        private void PressMappingAction(string buttonKey, string? raw)
+        {
             var action = MappingAction.Parse(raw);
             if (action.Kind == MappingKind.None) return;
 
-            try { _actionRunner.Press(ButtonKey(jsIndex, source), action); }
-            catch (Exception ex) { Log.Warn($"Action du bouton B{jsIndex} impossible", ex); }
+            try { _actionRunner.Press(buttonKey, action); }
+            catch (Exception ex) { Log.Warn($"Action {buttonKey} impossible", ex); }
         }
 
         // Toujours traité, même en pause : une touche « maintenue » ne doit jamais rester bloquée
-        private void ReleaseMapping(int jsIndex, int source)
+        private void ReleaseMapping(int jsIndex, int source) => ReleaseMapping(ButtonKey(jsIndex, source));
+
+        private void ReleaseMapping(string buttonKey)
         {
-            try { _actionRunner.Release(ButtonKey(jsIndex, source)); }
-            catch (Exception ex) { Log.Warn($"Relâchement du bouton B{jsIndex} impossible", ex); }
+            try { _actionRunner.Release(buttonKey); }
+            catch (Exception ex) { Log.Warn($"Relâchement {buttonKey} impossible", ex); }
         }
     }
 }

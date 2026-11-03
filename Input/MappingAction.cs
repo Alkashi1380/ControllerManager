@@ -20,6 +20,9 @@ namespace ControllerManager
     {
         [JsonPropertyName("path")] public string Path { get; set; } = "";
         [JsonPropertyName("args")] public string Args { get; set; } = "";
+
+        // Profil manette mémorisé sur le raccourci : id, ou LaunchProfileResolver.Auto / Keep / Ask
+        [JsonPropertyName("profileId")] public string ProfileId { get; set; } = LaunchProfileResolver.Auto;
     }
 
     public sealed class MacroStep

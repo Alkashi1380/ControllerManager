@@ -39,19 +39,11 @@ namespace ControllerManager
                     var loaded = JsonSerializer.Deserialize<List<GamepadProfile>>(File.ReadAllText(sourcePath));
                     if (loaded != null && loaded.Count > 0)
                     {
+                        int legacy = loaded.Count(p => p.settingsVersion < ProfileMigration.CurrentVersion);
                         foreach (var p in loaded)
-                        {
-                            p.exe ??= "";
-                            p.name ??= "Profil";
-                            if (string.IsNullOrEmpty(p.leftStickMode)) p.leftStickMode = "native";
-                            if (string.IsNullOrEmpty(p.rightStickMode)) p.rightStickMode = "native";
-                            if (p.mouseSensitivity <= 0) p.mouseSensitivity = 14.0;
-                            if (p.touchpadSensitivity <= 0) p.touchpadSensitivity = 1.2;
-                            if (string.IsNullOrEmpty(p.l2TriggerMode)) p.l2TriggerMode = "off";
-                            if (string.IsNullOrEmpty(p.r2TriggerMode)) p.r2TriggerMode = "off";
-                            if (p.l2TriggerForce <= 0) p.l2TriggerForce = 180;
-                            if (p.r2TriggerForce <= 0) p.r2TriggerForce = 180;
-                        }
+                            ProfileMigration.Migrate(p);
+                        if (legacy > 0)
+                            Log.Info($"{legacy} profil(s) migré(s) vers le format v{ProfileMigration.CurrentVersion} (réglages par stick)");
                         // Liste complète (id compris) avant publication : le thread d'entrées ne voit jamais un état partiel
                         EnsureProfileIds(loaded);
                         _profiles = loaded;
@@ -138,6 +130,8 @@ namespace ControllerManager
                     }
                 }
             };
+            foreach (var p in defaults)
+                ProfileMigration.Migrate(p); // crée leftStick / rightStick à partir des réglages ci-dessus
             EnsureProfileIds(defaults);
             _profiles = defaults;
         }

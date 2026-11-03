@@ -62,8 +62,8 @@ namespace ControllerManager
         // État des sticks séparé par manette (index SourceSony / SourceXbox) : deux manettes actives ne se marchent pas dessus
         private const int SourceSony = 0;
         private const int SourceXbox = 1;
-        private readonly int[] _scrollCooldown = new int[2];
-        private readonly bool[][] _stickKeyStates = { new bool[8], new bool[8] };
+        private readonly int[] _scrollCooldown = new int[4]; // [manette * 2 + stick]
+        private readonly bool[][] _stickKeyStates = { new bool[16], new bool[16] }; // [manette][stick * 8 + touche]
 
         // États Pavé Tactile Multipoint (1 doigt = Souris/Clic Gauche, 2 doigts = Scroll/Clic Droit)
         private bool _prevTouch1 = false;
@@ -284,6 +284,7 @@ namespace ControllerManager
             if (_foregroundHook == IntPtr.Zero)
                 Log.Warn("Hook de fenêtre active indisponible, détection du jeu toutes les 2 s");
 
+            _actionRunner.LaunchHandler = HandleLaunchRequest;
             _inputPollingThread = new System.Threading.Thread(InputPollingLoop) { IsBackground = true };
             _inputPollingThread.Start();
 
@@ -699,10 +700,7 @@ namespace ControllerManager
                     return;
                 }
 
-                var matched = _profiles.FirstOrDefault(p =>
-                    !string.IsNullOrWhiteSpace(p.exe) &&
-                    p.exe.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                         .Any(e => string.Equals(e, exeName, StringComparison.OrdinalIgnoreCase)));
+                var matched = FindLaunchOverride(exeName) ?? LaunchProfileResolver.FindByExe(exeName, _profiles);
 
                 if (matched != null && matched.id != _currentProfileId)
                 {
