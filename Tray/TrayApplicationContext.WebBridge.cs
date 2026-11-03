@@ -161,7 +161,7 @@ namespace ControllerManager
                     );
                 }
             }
-            catch { }
+            catch (Exception ex) { Log.Error("Message de l'interface non traité", ex); }
         }
 
         private static string? OptString(JsonElement root, string property) =>
@@ -227,7 +227,7 @@ namespace ControllerManager
                     bothUsbAndBt
                 });
             }
-            catch { }
+            catch (Exception ex) { Log.Warn("Inventaire matériel impossible", ex); }
         }
     }
 }

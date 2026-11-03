@@ -40,6 +40,8 @@ namespace ControllerManager
                 var pad = state.Gamepad;
                 ushort buttons = pad.wButtons;
 
+                HandlePauseCombo((buttons & XInput.BACK) != 0 && (buttons & XInput.START) != 0);
+
                 CheckButton(buttons, XInput.A, 0);
                 CheckButton(buttons, XInput.B, 1);
                 CheckButton(buttons, XInput.X, 2);
@@ -71,6 +73,28 @@ namespace ControllerManager
 
                 _prevButtons = buttons;
             }
+        }
+
+        // Combo manette (PS + Options / View + Menu) : bascule les raccourcis sans passer par le menu
+        private bool _prevPauseCombo = false;
+
+        private void HandlePauseCombo(bool comboDown)
+        {
+            bool pressed = comboDown && !_prevPauseCombo;
+            _prevPauseCombo = comboDown;
+            if (!pressed) return;
+
+            RunOnUiThread(() =>
+            {
+                _mappingEnabled = !_mappingEnabled;
+                Log.Info($"Raccourcis {(_mappingEnabled ? "réactivés" : "mis en pause")} par combo manette");
+                UpdateMappingToggleMenu();
+                SyncStateToWebView();
+                _trayIcon.ShowBalloonTip(1500,
+                    _mappingEnabled ? "⌨️ Raccourcis actifs" : "🔇 Raccourcis en pause",
+                    _mappingEnabled ? "La manette pilote à nouveau souris et raccourcis." : "Les boutons de la manette ne déclenchent plus d'action.",
+                    ToolTipIcon.Info);
+            });
         }
 
         // --- GESTION MULTIPOINT DU PAVÉ TACTILE (1 DOIGT = SOURIS/CLIC GAUCHE, 2 DOIGTS = SCROLL/CLIC DROIT) ---
@@ -224,10 +248,10 @@ namespace ControllerManager
             }
             else if (mode == "wasd" && isLeftStick)
             {
-                VirtualInput.SetKeyState(VirtualInput.VK_Z, fy < -0.4f, ref _stickKeyStates[0]);
-                VirtualInput.SetKeyState(VirtualInput.VK_S, fy > 0.4f, ref _stickKeyStates[1]);
-                VirtualInput.SetKeyState(VirtualInput.VK_Q, fx < -0.4f, ref _stickKeyStates[2]);
-                VirtualInput.SetKeyState(VirtualInput.VK_D, fx > 0.4f, ref _stickKeyStates[3]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_W, fy < -0.4f, ref _stickKeyStates[0]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_S, fy > 0.4f, ref _stickKeyStates[1]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_A, fx < -0.4f, ref _stickKeyStates[2]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_D, fx > 0.4f, ref _stickKeyStates[3]);
             }
             else if (mode == "arrows")
             {

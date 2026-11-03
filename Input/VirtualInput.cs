@@ -30,9 +30,6 @@ namespace ControllerManager
         public const byte VK_UP = 0x26;
         public const byte VK_RIGHT = 0x27;
         public const byte VK_DOWN = 0x28;
-        public const byte VK_Z = 0x5A;
-        public const byte VK_Q = 0x51;
-        public const byte VK_S = 0x53;
 
         public const uint KEYEVENTF_KEYUP = 0x0002;
         public const uint MOUSEEVENTF_MOVE = 0x0001;
@@ -72,6 +69,23 @@ namespace ControllerManager
                 keybd_event(vk, 0, 0, 0);
             else if (!down && prevDown)
                 keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+            prevDown = down;
+        }
+
+        // Codes de scan = position physique des touches (W/A/S/D en QWERTY = Z/Q/S/D en AZERTY)
+        public const byte SCAN_W = 0x11;
+        public const byte SCAN_A = 0x1E;
+        public const byte SCAN_S = 0x1F;
+        public const byte SCAN_D = 0x20;
+        public const uint KEYEVENTF_SCANCODE = 0x0008;
+
+        // Comme SetKeyState mais par position physique : indépendant de la disposition du clavier
+        public static void SetScanKeyState(byte scanCode, bool down, ref bool prevDown)
+        {
+            if (down && !prevDown)
+                keybd_event(0, scanCode, KEYEVENTF_SCANCODE, 0);
+            else if (!down && prevDown)
+                keybd_event(0, scanCode, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
             prevDown = down;
         }
 

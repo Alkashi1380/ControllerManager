@@ -6,7 +6,7 @@ echo ===================================================
 echo.
 echo [1] Lancer l'application (dotnet run)
 echo [2] Compiler la version Release (dotnet publish)
-echo [3] Ouvrir uniquement le Dashboard Web (UI/index.html)
+echo [3] Mode demo : Dashboard Web seul (sans le service C#, fonctions limitees)
 echo.
 set /p choice="Votre choix (1/2/3) : "
 

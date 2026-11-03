@@ -80,6 +80,15 @@ namespace ControllerManager
         private int _lastBatteryPercent = 100;
         private bool _lastBatteryCharging = false;
         private DateTime _lastBatteryCheck = DateTime.MinValue;
+        private int _lowBatteryAlertLevel = 100;
+        private SynchronizationContext? _uiContext;
+
+        // Les menus et bulles WinForms ne doivent être touchés que depuis le thread UI
+        private void RunOnUiThread(Action action)
+        {
+            if (_uiContext != null) _uiContext.Post(_ => action(), null);
+            else action();
+        }
 
         private ushort _prevButtons;
         private double _prevLT;
@@ -116,6 +125,8 @@ namespace ControllerManager
             Gamepad.GamepadAdded += (_, _) => { };
 
             var contextMenu = new ContextMenuStrip();
+            // La création du premier contrôle installe le contexte WinForms : on le garde pour le thread d'entrées
+            _uiContext = SynchronizationContext.Current;
             var openItem = new ToolStripMenuItem("🔧 Ouvrir le Dashboard", null, (_, _) => ShowDashboard())
             {
                 Font = new Font(Control.DefaultFont, FontStyle.Bold)
@@ -172,6 +183,11 @@ namespace ControllerManager
             _driverToolsMenuItem.DropDownItems.Add("🎛️ Ouvrir Contrôleurs de jeu Windows (joy.cpl)", null, (_, _) => OpenWindowsTool("joy.cpl"));
             _driverToolsMenuItem.DropDownItems.Add("⚙️ Ouvrir Gestionnaire de périphériques", null, (_, _) => OpenWindowsTool("devmgmt.msc"));
             _driverToolsMenuItem.DropDownItems.Add("📶 Paramètres Bluetooth Windows", null, (_, _) => OpenWindowsTool("ms-settings:bluetooth"));
+            _driverToolsMenuItem.DropDownItems.Add("📄 Ouvrir le dossier des journaux", null, (_, _) =>
+            {
+                Directory.CreateDirectory(Log.LogDirectory);
+                OpenWindowsTool(Log.LogDirectory);
+            });
             contextMenu.Items.Add(_driverToolsMenuItem);
 
             contextMenu.Items.Add(new ToolStripSeparator());
@@ -225,7 +241,7 @@ namespace ControllerManager
                     key.DeleteValue(AppRegistryName, false);
                 }
             }
-            catch { }
+            catch (Exception ex) { Log.Warn("Modification du démarrage automatique impossible", ex); }
         }
 
         private void ToggleHudOverlay(bool enable)
@@ -272,14 +288,28 @@ namespace ControllerManager
         {
             int killed = 0;
             string[] targets = killSteam
-                ? new[] { "DS4Windows", "steam", "InputMapper", "HidHideClient" }
-                : new[] { "DS4Windows", "InputMapper" };
+                ? ConflictingProcessNames.Concat(new[] { "steam", "HidHideClient" }).ToArray()
+                : ConflictingProcessNames;
 
-            foreach (var name in targets)
+            var running = targets.Where(n => Process.GetProcessesByName(n).Length > 0).ToList();
+            if (running.Count > 0)
+            {
+                // Fermer un programme peut faire perdre des données (ex. jeu Steam en cours) : on demande d'abord
+                var answer = MessageBox.Show(
+                    $"Fermer ces programmes ?\n\n• {string.Join("\n• ", running)}",
+                    "Purger les conflits de manette", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (answer != DialogResult.Yes) return;
+            }
+
+            foreach (var name in running)
             {
                 foreach (var p in Process.GetProcessesByName(name))
                 {
-                    try { p.Kill(); killed++; } catch { }
+                    using (p)
+                    {
+                        try { p.Kill(); killed++; Log.Info($"Processus fermé : {name}"); }
+                        catch (Exception ex) { Log.Warn($"Impossible de fermer {name}", ex); }
+                    }
                 }
             }
 
@@ -295,7 +325,7 @@ namespace ControllerManager
             {
                 Process.Start(new ProcessStartInfo(command) { UseShellExecute = true });
             }
-            catch { }
+            catch (Exception ex) { Log.Warn("Ouverture de l'outil Windows impossible", ex); }
         }
 
         private void RebuildTrayControllersMenu()
@@ -425,6 +455,38 @@ namespace ControllerManager
         {
             CheckBatteryAndNotify();
             CheckForegroundGameAndSwitchProfile();
+            CheckConflictingApps();
+        }
+
+        // Émulateurs qui capturent ou dupliquent les entrées de la manette
+        private static readonly string[] ConflictingProcessNames = { "DS4Windows", "InputMapper", "DSX", "DualSenseX" };
+        private readonly HashSet<string> _knownConflicts = new(StringComparer.OrdinalIgnoreCase);
+        private DateTime _lastConflictCheck = DateTime.MinValue;
+
+        private void CheckConflictingApps()
+        {
+            if ((DateTime.Now - _lastConflictCheck).TotalSeconds < 10)
+                return;
+            _lastConflictCheck = DateTime.Now;
+
+            foreach (var name in ConflictingProcessNames)
+            {
+                var procs = Process.GetProcessesByName(name);
+                bool running = procs.Length > 0;
+                foreach (var p in procs) p.Dispose();
+
+                if (running && _knownConflicts.Add(name))
+                {
+                    Log.Warn($"Logiciel en conflit détecté : {name}");
+                    _trayIcon.ShowBalloonTip(5000, "⚠️ Conflit de manette détecté",
+                        $"{name} est lancé : il peut doubler ou bloquer les entrées. " +
+                        "Menu Outils Pilotes → « Purger Conflits » pour le fermer.", ToolTipIcon.Warning);
+                }
+                else if (!running)
+                {
+                    _knownConflicts.Remove(name);
+                }
+            }
         }
 
         private void CheckBatteryAndNotify()
@@ -433,11 +495,16 @@ namespace ControllerManager
                 return;
 
             _lastBatteryCheck = DateTime.Now;
+            bool controllerPresent = false;
 
             try
             {
                 int xSlot = XInput.FindSlot(_selectedWebGpIndex);
-                if (_selectedControllerType == "XBOX" && xSlot >= 0)
+                bool xboxSelected = _selectedControllerType == "XBOX" && xSlot >= 0;
+                // Pour Sony, la batterie est lue par la boucle HID : valable seulement si le flux est ouvert
+                controllerPresent = xboxSelected || _activeSonyStream != null;
+
+                if (xboxSelected)
                 {
                     // Le rapport batterie WGI (précis au %) reste disponible en arrière-plan, contrairement aux lectures d'entrées
                     bool gotPrecise = false;
@@ -470,13 +537,41 @@ namespace ControllerManager
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { Log.Warn("Lecture de la batterie impossible", ex); }
 
             if (_lastBatteryPercent >= 0)
             {
                 _batteryMenuItem.Text = $"🔋 Batterie ({_selectedControllerType}) : {_lastBatteryPercent}% {(_lastBatteryCharging ? "(En charge)" : "")}";
                 RefreshHudOverlayContent();
                 SendToWebView(new { type = "battery", percent = _lastBatteryPercent, charging = _lastBatteryCharging });
+            }
+
+            if (controllerPresent)
+                NotifyLowBatteryIfNeeded(_lastBatteryPercent, _lastBatteryCharging);
+        }
+
+        // Alerte une seule fois par seuil (20 % puis 10 %) ; réarmée en charge ou au-dessus de 25 %
+        private void NotifyLowBatteryIfNeeded(int percent, bool charging)
+        {
+            if (charging || percent > 25)
+            {
+                _lowBatteryAlertLevel = 100;
+                return;
+            }
+
+            if (percent <= 10 && _lowBatteryAlertLevel > 10)
+            {
+                _lowBatteryAlertLevel = 10;
+                Log.Info($"Alerte batterie critique : {percent}% ({_selectedControllerType})");
+                _trayIcon.ShowBalloonTip(5000, "🪫 Batterie manette critique",
+                    $"Manette {_selectedControllerType} : {percent}%. Branchez-la rapidement.", ToolTipIcon.Warning);
+            }
+            else if (percent <= 20 && _lowBatteryAlertLevel > 20)
+            {
+                _lowBatteryAlertLevel = 20;
+                Log.Info($"Alerte batterie faible : {percent}% ({_selectedControllerType})");
+                _trayIcon.ShowBalloonTip(4000, "🔋 Batterie manette faible",
+                    $"Manette {_selectedControllerType} : {percent}%.", ToolTipIcon.Warning);
             }
         }
 
@@ -534,7 +629,7 @@ namespace ControllerManager
                     });
                 }
             }
-            catch { }
+            catch (Exception ex) { Log.Warn("Détection du jeu au premier plan impossible", ex); }
         }
 
         protected override void ExitThreadCore()

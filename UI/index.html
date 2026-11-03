@@ -949,7 +949,7 @@
               <option value="native">🎮 Stick Jeu Natif (Aucune action OS)</option>
               <option value="mouse">🖱️ Déplacer Curseur Souris</option>
               <option value="scroll">↕️ Molette de Défilement (Scroll)</option>
-              <option value="wasd">⌨️ Touches Clavier ZQSD (Mouvement)</option>
+              <option value="wasd">⌨️ Touches Clavier ZQSD / WASD (Mouvement)</option>
               <option value="arrows">⬆️ Flèches Directionnelles</option>
             </select>
           </div>
@@ -1641,9 +1641,6 @@ function initProfiles() {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
         parsed.forEach(p => {
-          if (p.exe && (p.exe.includes("msedge.exe") || p.exe.includes("chrome.exe"))) {
-            p.exe = "vlc.exe";
-          }
           if (!p.leftStickMode) p.leftStickMode = "native";
           if (!p.rightStickMode) p.rightStickMode = "native";
           if (!p.mouseSensitivity) p.mouseSensitivity = 14;

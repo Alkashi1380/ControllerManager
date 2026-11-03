@@ -183,7 +183,7 @@ namespace ControllerManager
                         if (openedTemp) targetStream.Dispose();
                     }
                 }
-                catch { }
+                catch (Exception ex) { Log.Warn("Envoi du rapport de sortie Sony impossible", ex); }
             }
         }
 
@@ -250,7 +250,7 @@ namespace ControllerManager
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { Log.Warn("Reset HID Sony incomplet", ex); }
 
             ApplyActiveProfileHardwareEffects();
 
@@ -296,6 +296,7 @@ namespace ControllerManager
                                 _activeSonyStream = null;
                                 return false;
                             }
+                            Log.Info($"Manette Sony connectée : PID {bestDev.ProductID:X4}, {(IsBluetoothHid(bestDev) ? "Bluetooth" : "USB")}");
 
                             try
                             {
@@ -485,6 +486,8 @@ namespace ControllerManager
                     cur[18] = tpClickRight;    // 18: Clic Pavé Droit
                     cur[19] = muteMicButton;   // 19: Bouton Mute Mic
 
+                    HandlePauseCombo(cur[16] && cur[9]); // PS + Options
+
                     bool buttonChanged = false;
                     for (int i = 0; i < 20; i++)
                     {
@@ -540,8 +543,9 @@ namespace ControllerManager
                 {
                     return true;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Log.Info($"Manette Sony perdue ({ex.GetType().Name}), reconnexion au prochain scan");
                     try { _activeSonyStream?.Dispose(); } catch { }
                     _activeSonyStream = null;
                     _activeSonyDevice = null;

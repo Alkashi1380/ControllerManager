@@ -40,11 +40,8 @@ namespace ControllerManager
                     {
                         foreach (var p in loaded)
                         {
-                            if (p.exe.Contains("msedge.exe", StringComparison.OrdinalIgnoreCase) ||
-                                p.exe.Contains("chrome.exe", StringComparison.OrdinalIgnoreCase))
-                            {
-                                p.exe = "vlc.exe";
-                            }
+                            p.exe ??= "";
+                            p.name ??= "Profil";
                             if (string.IsNullOrEmpty(p.leftStickMode)) p.leftStickMode = "native";
                             if (string.IsNullOrEmpty(p.rightStickMode)) p.rightStickMode = "native";
                             if (p.mouseSensitivity <= 0) p.mouseSensitivity = 14.0;
@@ -59,7 +56,7 @@ namespace ControllerManager
                         return;
                     }
                 }
-                catch { }
+                catch (Exception ex) { Log.Error("Lecture de profiles.json impossible, profils par défaut utilisés", ex); }
             }
 
             _profiles = new List<GamepadProfile>
@@ -149,7 +146,7 @@ namespace ControllerManager
                 Directory.CreateDirectory(AppDataDir);
                 File.WriteAllText(ProfilesFilePath, JsonSerializer.Serialize(_profiles));
             }
-            catch { }
+            catch (Exception ex) { Log.Error("Sauvegarde de profiles.json impossible", ex); }
         }
 
         // Donne un id unique aux profils qui n'en ont pas (anciens fichiers) ou qui partagent le même
