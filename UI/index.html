@@ -804,37 +804,64 @@
         </div>
       </div>
 
-      <!-- Col 2 : Gâchettes L2 / R2 -->
-      <div class="glass-card">
-        <div class="card-top">
-          <div>
-            <div class="card-title">Gâchettes L2 / R2</div>
-            <div class="card-subtitle">Course & Linéarité</div>
+      <!-- Col 2 : Gâchettes L2 / R2 + Banc d'Essai Haptique -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div class="glass-card">
+          <div class="card-top">
+            <div>
+              <div class="card-title">Gâchettes L2 / R2</div>
+              <div class="card-subtitle">Course & Linéarité</div>
+            </div>
+            <button class="btn" tabindex="-1" onclick="resetTriggerStats()">Reset</button>
           </div>
-          <button class="btn" tabindex="-1" onclick="resetTriggerStats()">Reset</button>
+
+          <div class="triggers-stage">
+            <div class="trigger-unit">
+              <span class="radar-label">L2 / LT</span>
+              <div class="trigger-pillar"><div id="bar-l2" class="trigger-liquid"></div></div>
+              <div class="telemetry-pills mono" style="width:100%; grid-template-columns:1fr;">
+                <div class="tele-item"><span>Pression</span><b id="l2-pct">0%</b></div>
+                <div class="tele-item"><span>Brut</span><b id="l2-raw">0.000</b></div>
+                <div class="tele-item"><span>Max</span><b id="l2-max">0.000</b></div>
+                <div class="tele-item"><span>Repos</span><b id="l2-idle" style="color:var(--success)">OK</b></div>
+              </div>
+            </div>
+
+            <div class="trigger-unit">
+              <span class="radar-label">R2 / RT</span>
+              <div class="trigger-pillar"><div id="bar-r2" class="trigger-liquid"></div></div>
+              <div class="telemetry-pills mono" style="width:100%; grid-template-columns:1fr;">
+                <div class="tele-item"><span>Pression</span><b id="r2-pct">0%</b></div>
+                <div class="tele-item"><span>Brut</span><b id="r2-raw">0.000</b></div>
+                <div class="tele-item"><span>Max</span><b id="r2-max">0.000</b></div>
+                <div class="tele-item"><span>Repos</span><b id="r2-idle" style="color:var(--success)">OK</b></div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="triggers-stage">
-          <div class="trigger-unit">
-            <span class="radar-label">L2 / LT</span>
-            <div class="trigger-pillar"><div id="bar-l2" class="trigger-liquid"></div></div>
-            <div class="telemetry-pills mono" style="width:100%; grid-template-columns:1fr;">
-              <div class="tele-item"><span>Pression</span><b id="l2-pct">0%</b></div>
-              <div class="tele-item"><span>Brut</span><b id="l2-raw">0.000</b></div>
-              <div class="tele-item"><span>Max</span><b id="l2-max">0.000</b></div>
-              <div class="tele-item"><span>Repos</span><b id="l2-idle" style="color:var(--success)">OK</b></div>
+        <div class="glass-card">
+          <div class="card-top">
+            <div>
+              <div class="card-title">Banc d'Essai Haptique (Rumble Motors)</div>
+              <div class="card-subtitle">Teste les moteurs sur le port sélectionné (Xbox & PS5)</div>
             </div>
+            <span id="rumble-status" class="chip accent">Prêt</span>
           </div>
-
-          <div class="trigger-unit">
-            <span class="radar-label">R2 / RT</span>
-            <div class="trigger-pillar"><div id="bar-r2" class="trigger-liquid"></div></div>
-            <div class="telemetry-pills mono" style="width:100%; grid-template-columns:1fr;">
-              <div class="tele-item"><span>Pression</span><b id="r2-pct">0%</b></div>
-              <div class="tele-item"><span>Brut</span><b id="r2-raw">0.000</b></div>
-              <div class="tele-item"><span>Max</span><b id="r2-max">0.000</b></div>
-              <div class="tele-item"><span>Repos</span><b id="r2-idle" style="color:var(--success)">OK</b></div>
-            </div>
+          <div class="row-between">
+            <span style="width:140px; font-size:12px; color:var(--text-secondary);">Moteur Gauche (Lourd)</span>
+            <input type="range" id="rumble-l" tabindex="-1" min="0" max="1" step="0.05" value="0.75" style="flex:1;">
+            <b id="rumble-l-val" class="mono" style="width:45px; text-align:right;">75%</b>
+          </div>
+          <div class="row-between">
+            <span style="width:140px; font-size:12px; color:var(--text-secondary);">Moteur Droit (Fin)</span>
+            <input type="range" id="rumble-r" tabindex="-1" min="0" max="1" step="0.05" value="0.75" style="flex:1;">
+            <b id="rumble-r-val" class="mono" style="width:45px; text-align:right;">75%</b>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn primary" tabindex="-1" style="flex:1;" onclick="testRumble(600)">🌊 Vibrer (600ms)</button>
+            <button class="btn" tabindex="-1" style="flex:1;" onclick="testRumblePulse()">⚡ Staccato</button>
+            <button class="btn ghost-danger" tabindex="-1" onclick="stopRumble()">Stop</button>
           </div>
         </div>
       </div>
@@ -1100,34 +1127,6 @@
               <span class="switch-track"></span>
               <span>🚀 <b>Démarrer automatiquement avec Windows</b> (Lancement discret en mode Tray <code>--tray</code>)</span>
             </label>
-          </div>
-        </div>
-
-        <div class="glass-card">
-          <div class="card-top">
-            <div>
-              <div class="card-title">Banc d'Essai Haptique (Rumble Motors)</div>
-              <div class="card-subtitle">Teste les moteurs sur le port sélectionné (Xbox & PS5)</div>
-            </div>
-            <span id="rumble-status" class="chip accent">Prêt</span>
-          </div>
-
-          <div class="row-between">
-            <span style="width:140px; font-size:12px; color:var(--text-secondary);">Moteur Gauche (Lourd)</span>
-            <input type="range" id="rumble-l" tabindex="-1" min="0" max="1" step="0.05" value="0.75" style="flex:1;">
-            <b id="rumble-l-val" class="mono" style="width:45px; text-align:right;">75%</b>
-          </div>
-
-          <div class="row-between">
-            <span style="width:140px; font-size:12px; color:var(--text-secondary);">Moteur Droit (Fin)</span>
-            <input type="range" id="rumble-r" tabindex="-1" min="0" max="1" step="0.05" value="0.75" style="flex:1;">
-            <b id="rumble-r-val" class="mono" style="width:45px; text-align:right;">75%</b>
-          </div>
-
-          <div style="display:flex; gap:10px;">
-            <button class="btn primary" tabindex="-1" style="flex:1;" onclick="testRumble(600)">🌊 Vibrer (600ms)</button>
-            <button class="btn" tabindex="-1" style="flex:1;" onclick="testRumblePulse()">⚡ Staccato</button>
-            <button class="btn ghost-danger" tabindex="-1" onclick="stopRumble()">Stop</button>
           </div>
         </div>
 
