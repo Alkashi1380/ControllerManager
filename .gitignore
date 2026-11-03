@@ -11,3 +11,6 @@ Release_Finale/
 .vs/
 .vscode/
 *.user
+
+# Sorties de l'installateur et de la CI
+artifacts/

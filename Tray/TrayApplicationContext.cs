@@ -505,7 +505,8 @@ namespace ControllerManager
                 Text = "Gamepad OS — Console Diagnostic, Périphériques & Profils",
                 Size = new Size(1300, 900),
                 StartPosition = FormStartPosition.CenterScreen,
-                BackColor = Color.FromArgb(7, 7, 9)
+                BackColor = Color.FromArgb(7, 7, 9),
+                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) // icône de l'exe (Assets/app.ico)
             };
 
             _webView = new WebView2 { Dock = DockStyle.Fill };

@@ -2,7 +2,27 @@
 
 Outil hybride ultra-léger de diagnostic de manettes, surveillance de batterie et gestion automatique de profils par jeu.
 
-## 📂 Contenu de l'archive
+## 📥 Installation
+
+1. Ouvrez la page [**Releases**](https://github.com/Alkashi1380/ControllerManager/releases) et téléchargez `ControllerManager-Setup-x.y.z.exe`.
+2. Lancez-le : installation **sans droits administrateur**, raccourci dans le menu Démarrer, options *icône sur le Bureau* et *lancement au démarrage de Windows*.
+3. Aucune dépendance à installer : .NET est inclus. Seul **WebView2** (déjà présent sur Windows 11 et Windows 10 à jour) est nécessaire pour la fenêtre de configuration ; l'installateur propose de le télécharger s'il manque.
+
+- **Mise à jour** : lancez simplement le nouvel installateur, l'appli en cours est fermée automatiquement et vos profils sont conservés.
+- **Désinstallation** : Paramètres Windows → Applications. Vos profils (`%APPDATA%\ControllerManager`) sont conservés, sauf si vous choisissez de les supprimer.
+- **Version portable** : `ControllerManager-x.y.z-portable-win-x64.zip`, à décompresser n'importe où.
+- Empreintes de vérification : `SHA256SUMS.txt` dans chaque version.
+
+## 🏷️ Publier une nouvelle version (développeur)
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+Le workflow [`release.yml`](.github/workflows/release.yml) lance les tests, compile l'appli autonome, construit l'installateur ([`installer/ControllerManager.iss`](installer/ControllerManager.iss), Inno Setup) et crée la version GitHub avec les notes générées. Le workflow [`ci.yml`](.github/workflows/ci.yml) compile et teste chaque push.
+
+## 📂 Contenu du dépôt
 
 - **`UI/index.html`** : Le Dashboard Web 100 % autonome (HTML5 / Canvas 2D / Gamepad API / WebHID). Vous pouvez double-cliquer dessus pour l'utiliser directement dans Edge ou Chrome sans rien compiler.
 - **Service natif Windows (.NET 8)** : mode *Tray-Only* (libération de la RAM à la fermeture de la fenêtre), détection du jeu actif (`GetForegroundWindow`), purge des conflits (`Steam` / `DS4Windows`) et suivi batterie.

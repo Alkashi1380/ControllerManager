@@ -11,12 +11,30 @@ namespace ControllerManager
 
         public static Icon Create(Color accent, bool paused)
         {
+            using var bmp = RenderBitmap(accent, paused, 32);
+            IntPtr hIcon = bmp.GetHicon();
+            try
+            {
+                // Clone géré : le handle natif peut alors être libéré tout de suite
+                using var temp = Icon.FromHandle(hIcon);
+                return (Icon)temp.Clone();
+            }
+            finally
+            {
+                DestroyIcon(hIcon);
+            }
+        }
+
+        // Dessin vectoriel sur une grille de 32 unités, mis à l'échelle : sert aussi à générer l'icône de l'appli (jusqu'à 256 px)
+        public static Bitmap RenderBitmap(Color accent, bool paused, int size)
+        {
             Color body = paused ? Color.FromArgb(120, 125, 135) : accent;
-            using var bmp = new Bitmap(32, 32);
+            var bmp = new Bitmap(size, size);
             using (var g = Graphics.FromImage(bmp))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.Clear(Color.Transparent);
+                g.ScaleTransform(size / 32f, size / 32f);
 
                 // Corps arrondi + deux poignées, remplis d'une seule couleur (pas de contour qui couperait la forme)
                 using (var brush = new SolidBrush(body))
@@ -50,18 +68,7 @@ namespace ControllerManager
                     g.FillRectangle(pauseBrush, 17, 0, 3, 8);
                 }
             }
-
-            IntPtr hIcon = bmp.GetHicon();
-            try
-            {
-                // Clone géré : le handle natif peut alors être libéré tout de suite
-                using var temp = Icon.FromHandle(hIcon);
-                return (Icon)temp.Clone();
-            }
-            finally
-            {
-                DestroyIcon(hIcon);
-            }
+            return bmp;
         }
     }
 }

@@ -1,0 +1,61 @@
+name: Release
+
+# Publier une version :  git tag v1.2.3  puis  git push origin v1.2.3
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # création de la version GitHub et dépôt des fichiers
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Numéro de version (tag v1.2.3 → 1.2.3)
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Tag invalide : $env:GITHUB_REF_NAME (attendu vX.Y.Z)" }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Tests unitaires
+        run: dotnet test ControllerManager.Tests -c Release
+
+      # Autonome : l'utilisateur n'a pas besoin d'installer .NET
+      - name: Publication
+        run: dotnet publish ControllerManager.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ env.VERSION }} -o artifacts/publish
+
+      - name: Installateur (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=$env:VERSION" "/DSourceDir=$pwd\artifacts\publish" installer\ControllerManager.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC a échoué ($LASTEXITCODE)" }
+
+      - name: Version portable (ZIP)
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts/publish -Include *.pdb,*.xml -Recurse | Remove-Item
+          Compress-Archive -Path artifacts/publish/* -DestinationPath "artifacts/installer/ControllerManager-$env:VERSION-portable-win-x64.zip"
+
+      - name: Empreintes SHA-256
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts/installer -File | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          } | Out-File artifacts/installer/SHA256SUMS.txt -Encoding ascii
+
+      - name: Version GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ControllerManager ${{ env.VERSION }}
+          files: artifacts/installer/*
+          generate_release_notes: true

@@ -19,7 +19,8 @@ namespace ControllerManager.Tests
         [Fact]
         public void ChildProcessOfSameUser_HasSameElevation()
         {
-            using var child = Process.Start(new ProcessStartInfo("cmd.exe", "/c timeout /t 5 >nul")
+            // ping plutôt que timeout : timeout échoue sans console interactive (agents CI)
+            using var child = Process.Start(new ProcessStartInfo("ping.exe", "-n 6 127.0.0.1")
             {
                 CreateNoWindow = true,
                 UseShellExecute = false
