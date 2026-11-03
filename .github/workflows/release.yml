@@ -52,7 +52,8 @@ jobs:
           # Liste figée avant d'écrire : sinon SHA256SUMS.txt (encore ouvert) se retrouve dans le pipeline
           $files = @(Get-ChildItem artifacts/installer -File)
           $lines = $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
-          $lines | Out-File artifacts/installer/SHA256SUMS.txt -Encoding ascii
+          # Fins de ligne LF : format attendu par « sha256sum -c »
+          [IO.File]::WriteAllText("$pwd/artifacts/installer/SHA256SUMS.txt", (($lines -join "`n") + "`n"), [Text.Encoding]::ASCII)
           $lines
 
       - name: Version GitHub
