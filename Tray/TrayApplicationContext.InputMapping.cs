@@ -357,11 +357,12 @@ namespace ControllerManager
 
         private void ExecuteMapping(int jsIndex, int source)
         {
+            // Sélecteur de profil ouvert (lancement d'appli) : la manette le pilote au lieu de déclencher ses actions.
+            // Testé AVANT le garde « dashboard au premier plan » : le sélecteur est lui-même une fenêtre de l'appli.
+            if (TryRouteToProfileChooser(jsIndex)) return;
+
             if (!_mappingEnabled || _isDashboardFocused)
                 return;
-
-            // Sélecteur de profil ouvert (lancement d'appli) : la manette le pilote au lieu de déclencher ses actions
-            if (TryRouteToProfileChooser(jsIndex)) return;
 
             var activeProfile = GetActiveProfile();
             if (activeProfile?.buttonMapping == null ||
