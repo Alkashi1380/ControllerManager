@@ -89,12 +89,20 @@ namespace ControllerManager
 
         // Combo manette (PS + Options / View + Menu) : bascule les raccourcis sans passer par le menu
         private readonly bool[] _prevPauseCombo = new bool[2];
+        private const int PauseToggleCooldownMs = 1000;
+        private DateTime _lastPauseToggle = DateTime.MinValue;
 
         private void HandlePauseCombo(bool comboDown, int source)
         {
             bool pressed = comboDown && !_prevPauseCombo[source];
             _prevPauseCombo[source] = comboDown;
             if (!pressed) return;
+
+            // Anti-rebond : vu en test réel, des appuis rapprochés faisaient basculer 6 fois en 3 s
+            // et laissaient l'appli en pause sans que l'utilisateur s'en rende compte
+            var now = DateTime.Now;
+            if ((now - _lastPauseToggle).TotalMilliseconds < PauseToggleCooldownMs) return;
+            _lastPauseToggle = now;
 
             RunOnUiThread(() =>
             {
