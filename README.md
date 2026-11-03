@@ -5,9 +5,16 @@ Outil hybride ultra-léger de diagnostic de manettes, surveillance de batterie e
 ## 📂 Contenu de l'archive
 
 - **`UI/index.html`** : Le Dashboard Web 100 % autonome (HTML5 / Canvas 2D / Gamepad API / WebHID). Vous pouvez double-cliquer dessus pour l'utiliser directement dans Edge ou Chrome sans rien compiler.
-- **`Program.cs`** : Le service natif Windows (.NET 8) gérant le mode *Tray-Only* (libération de la RAM à la fermeture de la fenêtre), la détection du jeu actif (`GetForegroundWindow`), la détection de conflits (`Steam` + `DS4Windows`) et les alertes batterie.
+- **Service natif Windows (.NET 8)** : mode *Tray-Only* (libération de la RAM à la fermeture de la fenêtre), détection du jeu actif (`GetForegroundWindow`), purge des conflits (`Steam` / `DS4Windows`) et suivi batterie.
+  - `Program.cs` : point d'entrée (`--tray` pour démarrer minimisé).
+  - `Tray/TrayApplicationContext.cs` : menu de la barre des tâches, dashboard WebView2, surveillance (batterie, jeu actif).
+  - `Tray/TrayApplicationContext.SonyHid.cs` : lecture / écriture HID DualSense & DS4 (USB + Bluetooth avec CRC).
+  - `Tray/TrayApplicationContext.InputMapping.cs` : boucle d'entrées, XInput, sticks / pavé tactile → souris & clavier.
+  - `Tray/TrayApplicationContext.Profiles.cs` : chargement / sauvegarde des profils (`%APPDATA%\ControllerManager\profiles.json`).
+  - `Tray/TrayApplicationContext.WebBridge.cs` : messages JSON entre le C# et `UI/index.html`.
+  - `Hardware/` (XInput, CRC DualSense), `Input/VirtualInput.cs`, `Forms/HudOverlayForm.cs`, `Models/GamepadProfile.cs`.
 - **`ControllerManager.csproj`** : Le fichier de projet .NET 8 (WinForms + WebView2 + HidSharp).
-- **`profiles.json`** : Les profils de configuration par défaut.
+- **`profiles.json`** : Créé automatiquement dans `%APPDATA%\ControllerManager\` (profils par défaut générés au premier lancement).
 - **`build_and_run.bat`** : Script rapide pour lancer ou compiler l'application en un clic.
 
 ## 🚀 Utilisation rapide
