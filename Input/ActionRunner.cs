@@ -7,7 +7,8 @@ namespace ControllerManager
     // d'entrées pour ne jamais retarder la lecture de la manette.
     public sealed class ActionRunner
     {
-        public const int TurboIntervalMs = 80; // ~12 répétitions par seconde
+        // 80 ms demandés ≈ 92 ms réels (résolution des minuteries Windows ~15 ms) : ~11 répétitions par seconde, mesuré en test réel
+        public const int TurboIntervalMs = 80;
 
         // Tâche de fond d'un bouton : le turbo s'arrête au relâchement, une macro va jusqu'au bout
         private sealed record RunningAction(CancellationTokenSource Cts, bool StopOnRelease);
@@ -71,6 +72,7 @@ namespace ControllerManager
         // Pause, changement de profil, fermeture : aucune touche ne doit rester enfoncée
         public void ReleaseAll()
         {
+
             foreach (var key in _held.Keys.ToList())
                 if (_held.TryRemove(key, out var combo))
                     VirtualInput.ReleaseKeyCombo(combo);
