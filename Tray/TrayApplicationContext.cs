@@ -59,8 +59,11 @@ namespace ControllerManager
 
         private double _mouseCarryX = 0;
         private double _mouseCarryY = 0;
-        private int _scrollCooldown = 0;
-        private readonly bool[] _stickKeyStates = new bool[8];
+        // État des sticks séparé par manette (index SourceSony / SourceXbox) : deux manettes actives ne se marchent pas dessus
+        private const int SourceSony = 0;
+        private const int SourceXbox = 1;
+        private readonly int[] _scrollCooldown = new int[2];
+        private readonly bool[][] _stickKeyStates = { new bool[8], new bool[8] };
 
         // États Pavé Tactile Multipoint (1 doigt = Souris/Clic Gauche, 2 doigts = Scroll/Clic Droit)
         private bool _prevTouch1 = false;
@@ -99,6 +102,32 @@ namespace ControllerManager
 
         private const string RunRegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
         private const string AppRegistryName = "GamepadOSManager";
+        private const string SettingsRegistryKey = @"SOFTWARE\ControllerManager";
+
+        // Sony + Xbox pilotent en même temps (sinon seule la manette sélectionnée agit). Mémorisé dans HKCU.
+        private volatile bool _multiControllerEnabled = ReadMultiControllerSetting();
+
+        private static bool ReadMultiControllerSetting()
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(SettingsRegistryKey, false);
+                return key?.GetValue("MultiController") is int v && v != 0;
+            }
+            catch { return false; }
+        }
+
+        private void SetMultiControllerEnabled(bool enabled)
+        {
+            _multiControllerEnabled = enabled;
+            try
+            {
+                using var key = Registry.CurrentUser.CreateSubKey(SettingsRegistryKey);
+                key.SetValue("MultiController", enabled ? 1 : 0, RegistryValueKind.DWord);
+            }
+            catch (Exception ex) { Log.Warn("Sauvegarde du mode multi-manettes impossible", ex); }
+            Log.Info($"Mode multi-manettes {(enabled ? "activé" : "désactivé")}");
+        }
         // Données utilisateur hors du dossier de l'exe (inscriptible même installé dans Program Files)
         private static readonly string AppDataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ControllerManager");
@@ -186,6 +215,18 @@ namespace ControllerManager
                 SyncStateToWebView();
             };
             contextMenu.Items.Add(_startupToggleMenuItem);
+
+            var multiItem = new ToolStripMenuItem("🎮🎮 Toutes les manettes actives (PS + Xbox)")
+            {
+                Checked = _multiControllerEnabled
+            };
+            multiItem.Click += (_, _) =>
+            {
+                SetMultiControllerEnabled(!_multiControllerEnabled);
+                multiItem.Checked = _multiControllerEnabled;
+                SyncStateToWebView();
+            };
+            contextMenu.Items.Add(multiItem);
 
             _controllersRootMenuItem = new ToolStripMenuItem("🕹️ Manette Active : Auto");
             contextMenu.Items.Add(_controllersRootMenuItem);

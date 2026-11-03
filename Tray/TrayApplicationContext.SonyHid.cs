@@ -60,7 +60,8 @@ namespace ControllerManager
             string r2Mode, int r2Force,
             byte rumbleLeft = 0, byte rumbleRight = 0)
         {
-            if (_selectedControllerType == "XBOX" && XInput.FindSlot(_selectedWebGpIndex) >= 0)
+            // En mode multi-manettes la PS5 reste active : on lui envoie toujours couleur et gâchettes
+            if (!_multiControllerEnabled && _selectedControllerType == "XBOX" && XInput.FindSlot(_selectedWebGpIndex) >= 0)
                 return;
 
             lock (_sonyLock)
@@ -363,7 +364,7 @@ namespace ControllerManager
                     bool t1Active = state.T1Active, t2Active = state.T2Active;
                     int t1X = state.T1X, t1Y = state.T1Y, t2X = state.T2X, t2Y = state.T2Y;
 
-                    HandlePauseCombo(cur[16] && cur[9]); // PS + Options
+                    HandlePauseCombo(cur[16] && cur[9], SourceSony); // PS + Options
 
                     bool buttonChanged = false;
                     for (int i = 0; i < 20; i++)
@@ -385,7 +386,7 @@ namespace ControllerManager
                     if ((DateTime.Now - lastStickStep).TotalMilliseconds >= 8)
                     {
                         lastStickStep = DateTime.Now;
-                        ProcessAnalogSticksMapping(lx, ly, rx, ry);
+                        ProcessAnalogSticksMapping(lx, ly, rx, ry, SourceSony);
                     }
 
                     if (_webView != null && (buttonChanged || (DateTime.Now - _lastWebUiPush).TotalMilliseconds >= 16))

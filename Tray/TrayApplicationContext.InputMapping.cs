@@ -6,7 +6,8 @@ namespace ControllerManager
         {
             byte[] sonyBuffer = new byte[128];
             byte[] drainBuffer = new byte[128];
-            DateTime lastStickStep = DateTime.Now;
+            DateTime lastSonyStickStep = DateTime.Now;
+            DateTime lastXboxStickStep = DateTime.Now;
             int xSlot = -1;
             DateTime lastXInputScan = DateTime.MinValue;
 
@@ -19,17 +20,23 @@ namespace ControllerManager
                     xSlot = XInput.FindSlot(_selectedWebGpIndex);
                 }
 
-                if (_selectedControllerType == "PS5" || _selectedControllerType == "PS4" || _selectedWebGpIndex == 99 || xSlot < 0)
+                // Mode multi-manettes : Sony et Xbox pilotent en même temps ; sinon seule la manette choisie agit
+                bool multi = _multiControllerEnabled;
+                bool sonySelected = _selectedControllerType == "PS5" || _selectedControllerType == "PS4" || _selectedWebGpIndex == 99 || xSlot < 0;
+
+                bool sonyPolled = (multi || sonySelected) &&
+                                  PollSonyPersistentStream(sonyBuffer, drainBuffer, ref lastSonyStickStep);
+
+                bool pollXbox = xSlot >= 0 && (multi || !sonyPolled);
+                if (!pollXbox)
                 {
-                    if (PollSonyPersistentStream(sonyBuffer, drainBuffer, ref lastStickStep))
-                    {
-                        System.Threading.Thread.Sleep(1);
-                        continue;
-                    }
+                    System.Threading.Thread.Sleep(sonyPolled ? 1 : 8);
+                    continue;
                 }
 
-                System.Threading.Thread.Sleep(8);
-                if (xSlot < 0) continue;
+                // La lecture Sony bloque déjà jusqu'à 4 ms : pas d'attente supplémentaire dans ce cas
+                if (!sonyPolled)
+                    System.Threading.Thread.Sleep(8);
 
                 if (XInput.XInputGetState((uint)xSlot, out var state) != XInput.ERROR_SUCCESS)
                 {
@@ -37,51 +44,56 @@ namespace ControllerManager
                     continue;
                 }
 
-                var pad = state.Gamepad;
-                ushort buttons = pad.wButtons;
-
-                HandlePauseCombo((buttons & XInput.BACK) != 0 && (buttons & XInput.START) != 0);
-
-                CheckButton(buttons, XInput.A, 0);
-                CheckButton(buttons, XInput.B, 1);
-                CheckButton(buttons, XInput.X, 2);
-                CheckButton(buttons, XInput.Y, 3);
-                CheckButton(buttons, XInput.LEFT_SHOULDER, 4);
-                CheckButton(buttons, XInput.RIGHT_SHOULDER, 5);
-                CheckButton(buttons, XInput.BACK, 8);
-                CheckButton(buttons, XInput.START, 9);
-                CheckButton(buttons, XInput.LEFT_THUMB, 10);
-                CheckButton(buttons, XInput.RIGHT_THUMB, 11);
-                CheckButton(buttons, XInput.DPAD_UP, 12);
-                CheckButton(buttons, XInput.DPAD_DOWN, 13);
-                CheckButton(buttons, XInput.DPAD_LEFT, 14);
-                CheckButton(buttons, XInput.DPAD_RIGHT, 15);
-
-                CheckTrigger(pad.bLeftTrigger / 255.0, ref _prevLT, 6);
-                CheckTrigger(pad.bRightTrigger / 255.0, ref _prevRT, 7);
-
-                if ((DateTime.Now - lastStickStep).TotalMilliseconds >= 8)
-                {
-                    lastStickStep = DateTime.Now;
-                    ProcessAnalogSticksMapping(
-                        Math.Max(-1f, pad.sThumbLX / 32767f),
-                        -Math.Max(-1f, pad.sThumbLY / 32767f),
-                        Math.Max(-1f, pad.sThumbRX / 32767f),
-                        -Math.Max(-1f, pad.sThumbRY / 32767f)
-                    );
-                }
-
-                _prevButtons = buttons;
+                PollXboxState(state.Gamepad, ref lastXboxStickStep);
             }
         }
 
-        // Combo manette (PS + Options / View + Menu) : bascule les raccourcis sans passer par le menu
-        private bool _prevPauseCombo = false;
-
-        private void HandlePauseCombo(bool comboDown)
+        private void PollXboxState(XInput.XINPUT_GAMEPAD pad, ref DateTime lastStickStep)
         {
-            bool pressed = comboDown && !_prevPauseCombo;
-            _prevPauseCombo = comboDown;
+            ushort buttons = pad.wButtons;
+
+            HandlePauseCombo((buttons & XInput.BACK) != 0 && (buttons & XInput.START) != 0, SourceXbox);
+
+            CheckButton(buttons, XInput.A, 0);
+            CheckButton(buttons, XInput.B, 1);
+            CheckButton(buttons, XInput.X, 2);
+            CheckButton(buttons, XInput.Y, 3);
+            CheckButton(buttons, XInput.LEFT_SHOULDER, 4);
+            CheckButton(buttons, XInput.RIGHT_SHOULDER, 5);
+            CheckButton(buttons, XInput.BACK, 8);
+            CheckButton(buttons, XInput.START, 9);
+            CheckButton(buttons, XInput.LEFT_THUMB, 10);
+            CheckButton(buttons, XInput.RIGHT_THUMB, 11);
+            CheckButton(buttons, XInput.DPAD_UP, 12);
+            CheckButton(buttons, XInput.DPAD_DOWN, 13);
+            CheckButton(buttons, XInput.DPAD_LEFT, 14);
+            CheckButton(buttons, XInput.DPAD_RIGHT, 15);
+
+            CheckTrigger(pad.bLeftTrigger / 255.0, ref _prevLT, 6);
+            CheckTrigger(pad.bRightTrigger / 255.0, ref _prevRT, 7);
+
+            if ((DateTime.Now - lastStickStep).TotalMilliseconds >= 8)
+            {
+                lastStickStep = DateTime.Now;
+                ProcessAnalogSticksMapping(
+                    Math.Max(-1f, pad.sThumbLX / 32767f),
+                    -Math.Max(-1f, pad.sThumbLY / 32767f),
+                    Math.Max(-1f, pad.sThumbRX / 32767f),
+                    -Math.Max(-1f, pad.sThumbRY / 32767f),
+                    SourceXbox
+                );
+            }
+
+            _prevButtons = buttons;
+        }
+
+        // Combo manette (PS + Options / View + Menu) : bascule les raccourcis sans passer par le menu
+        private readonly bool[] _prevPauseCombo = new bool[2];
+
+        private void HandlePauseCombo(bool comboDown, int source)
+        {
+            bool pressed = comboDown && !_prevPauseCombo[source];
+            _prevPauseCombo[source] = comboDown;
             if (!pressed) return;
 
             RunOnUiThread(() =>
@@ -192,7 +204,7 @@ namespace ControllerManager
             _prevTouch2 = t2Active;
         }
 
-        private void ProcessAnalogSticksMapping(float lx, float ly, float rx, float ry)
+        private void ProcessAnalogSticksMapping(float lx, float ly, float rx, float ry, int source)
         {
             if (!_mappingEnabled || _isDashboardFocused)
                 return;
@@ -203,11 +215,11 @@ namespace ControllerManager
             double dz = prof.deadzone > 0.01 ? prof.deadzone : 0.08;
             double sens = prof.mouseSensitivity > 1 ? prof.mouseSensitivity : 14.0;
 
-            ApplySingleStickAction(prof.leftStickMode, lx, ly, dz, sens, isLeftStick: true);
-            ApplySingleStickAction(prof.rightStickMode, rx, ry, dz, sens, isLeftStick: false);
+            ApplySingleStickAction(prof.leftStickMode, lx, ly, dz, sens, isLeftStick: true, source);
+            ApplySingleStickAction(prof.rightStickMode, rx, ry, dz, sens, isLeftStick: false, source);
         }
 
-        private void ApplySingleStickAction(string mode, float x, float y, double dz, double sens, bool isLeftStick)
+        private void ApplySingleStickAction(string mode, float x, float y, double dz, double sens, bool isLeftStick, int source)
         {
             if (string.IsNullOrEmpty(mode) || mode == "native") return;
 
@@ -238,27 +250,27 @@ namespace ControllerManager
             }
             else if (mode == "scroll")
             {
-                if (_scrollCooldown > 0) _scrollCooldown--;
-                if (Math.Abs(fy) > 0.25f && _scrollCooldown <= 0)
+                if (_scrollCooldown[source] > 0) _scrollCooldown[source]--;
+                if (Math.Abs(fy) > 0.25f && _scrollCooldown[source] <= 0)
                 {
                     int wheel = (int)(-fy * 90);
                     VirtualInput.ScrollMouseWheel(wheel);
-                    _scrollCooldown = 3;
+                    _scrollCooldown[source] = 3;
                 }
             }
             else if (mode == "wasd" && isLeftStick)
             {
-                VirtualInput.SetScanKeyState(VirtualInput.SCAN_W, fy < -0.4f, ref _stickKeyStates[0]);
-                VirtualInput.SetScanKeyState(VirtualInput.SCAN_S, fy > 0.4f, ref _stickKeyStates[1]);
-                VirtualInput.SetScanKeyState(VirtualInput.SCAN_A, fx < -0.4f, ref _stickKeyStates[2]);
-                VirtualInput.SetScanKeyState(VirtualInput.SCAN_D, fx > 0.4f, ref _stickKeyStates[3]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_W, fy < -0.4f, ref _stickKeyStates[source][0]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_S, fy > 0.4f, ref _stickKeyStates[source][1]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_A, fx < -0.4f, ref _stickKeyStates[source][2]);
+                VirtualInput.SetScanKeyState(VirtualInput.SCAN_D, fx > 0.4f, ref _stickKeyStates[source][3]);
             }
             else if (mode == "arrows")
             {
-                VirtualInput.SetKeyState(VirtualInput.VK_UP, fy < -0.4f, ref _stickKeyStates[4]);
-                VirtualInput.SetKeyState(VirtualInput.VK_DOWN, fy > 0.4f, ref _stickKeyStates[5]);
-                VirtualInput.SetKeyState(VirtualInput.VK_LEFT, fx < -0.4f, ref _stickKeyStates[6]);
-                VirtualInput.SetKeyState(VirtualInput.VK_RIGHT, fx > 0.4f, ref _stickKeyStates[7]);
+                VirtualInput.SetKeyState(VirtualInput.VK_UP, fy < -0.4f, ref _stickKeyStates[source][4]);
+                VirtualInput.SetKeyState(VirtualInput.VK_DOWN, fy > 0.4f, ref _stickKeyStates[source][5]);
+                VirtualInput.SetKeyState(VirtualInput.VK_LEFT, fx < -0.4f, ref _stickKeyStates[source][6]);
+                VirtualInput.SetKeyState(VirtualInput.VK_RIGHT, fx > 0.4f, ref _stickKeyStates[source][7]);
             }
         }
 
