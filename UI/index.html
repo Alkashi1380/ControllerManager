@@ -546,6 +546,38 @@
   .bind-action-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .bind-tile:not(.active-bind) .bind-action { color: var(--text-muted); font-weight: 500; }
 
+  /* ---- Sticks : tuiles (même logique que les boutons) ---- */
+  .stick-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+  button.stick-tile { min-height: 74px; }
+  .stick-meta { font-size: 11px; color: var(--text-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .touchpad-tile { gap: 6px; }
+  .dir-pad {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, auto);
+    gap: 8px; max-width: 560px; margin: 0 auto; width: 100%;
+  }
+  .dir-pad .dir-up { grid-column: 2; grid-row: 1; }
+  .dir-pad .dir-left { grid-column: 1; grid-row: 2; }
+  .dir-pad .dir-center { grid-column: 2; grid-row: 2; display: flex; align-items: center; justify-content: center; font-size: 26px; opacity: 0.5; }
+  .dir-pad .dir-right { grid-column: 3; grid-row: 2; }
+  .dir-pad .dir-down { grid-column: 2; grid-row: 3; }
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input[type="range"] { flex: 1; }
+  .slider-row b { min-width: 44px; text-align: right; }
+
+  /* ---- Matériel du profil (gâchettes + barre lumineuse) ---- */
+  .profile-hw-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; }
+  @media (max-width: 1150px) { .profile-hw-grid { grid-template-columns: 1fr; } }
+  .profile-hw-block { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .color-custom { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+  .color-custom input[type="color"] { width: 34px; height: 24px; border: 1px solid var(--border-focus); border-radius: 6px; background: none; padding: 0; cursor: pointer; }
+  .moved-hint {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    border: 1px dashed rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.06);
+    border-radius: var(--radius-md); padding: 10px 12px; font-size: 12px; color: var(--text-secondary);
+  }
+  .profile-hw-flash { animation: hwFlash 1.4s ease; }
+  @keyframes hwFlash { 0%, 60% { box-shadow: 0 0 0 2px var(--accent), 0 0 30px var(--accent-glow); } 100% { box-shadow: none; } }
+
   /* ---- Fenêtres modales ---- */
   .modal-backdrop {
     position: fixed; inset: 0; z-index: 100; padding: 16px;
@@ -1060,65 +1092,118 @@
         </div>
       </div>
 
-      <div class="glass-card">
-        <div class="card-top">
+      <div style="display:flex; flex-direction:column; gap:14px; min-width:0;">
+        <div class="glass-card">
+          <div class="card-top">
+            <div>
+              <div class="card-title">🕹️ Paramétrage des Sticks Analogiques, Pavé Tactile Multipoint & 20 Boutons</div>
+              <div class="card-subtitle">1 doigt = Souris + Tap Clic Gauche | 2 doigts = Scroll Molette + Tap Clic Droit | Clics Pavé B17/B18</div>
+            </div>
+            <span id="mapped-count-badge" class="chip accent mono">0 raccourci actif</span>
+          </div>
+
           <div>
-            <div class="card-title">🕹️ Paramétrage des Sticks Analogiques, Pavé Tactile Multipoint & 20 Boutons</div>
-            <div class="card-subtitle">1 doigt = Souris + Tap Clic Gauche | 2 doigts = Scroll Molette + Tap Clic Droit | Clics Pavé B17/B18</div>
-          </div>
-          <span id="mapped-count-badge" class="chip accent mono">0 raccourci actif</span>
-        </div>
-
-        <div class="analog-config-bar">
-          <div class="analog-box">
-            <div class="analog-box-title"><span>Stick Analogique Gauche (LS)</span></div>
-            <select id="ls-mode-select" tabindex="-1" onchange="saveCurrentProfile(true); this.blur();">
-              <option value="native">🎮 Stick Jeu Natif (Aucune action OS)</option>
-              <option value="mouse">🖱️ Déplacer Curseur Souris</option>
-              <option value="scroll">↕️ Molette de Défilement (Scroll)</option>
-              <option value="wasd">⌨️ Touches Clavier ZQSD / WASD (Mouvement)</option>
-              <option value="arrows">⬆️ Flèches Directionnelles</option>
-            </select>
-          </div>
-
-          <div class="analog-box">
-            <div class="analog-box-title"><span>Stick Analogique Droit (RS)</span></div>
-            <select id="rs-mode-select" tabindex="-1" onchange="saveCurrentProfile(true); this.blur();">
-              <option value="native">🎮 Stick Jeu Natif (Aucune action OS)</option>
-              <option value="scroll">↕️ Molette de Défilement (Scroll)</option>
-              <option value="mouse">🖱️ Déplacer Curseur Souris</option>
-              <option value="arrows">⬆️ Flèches Directionnelles</option>
-            </select>
-          </div>
-
-          <div class="analog-box">
-            <div class="analog-box-title">
-              <span>Vitesse Souris Stick</span>
-              <b id="sens-val" class="mono">14</b>
+            <div class="bind-group-title">Sticks analogiques & pavé tactile</div>
+            <div class="bind-group-grid stick-grid">
+            <button type="button" class="bind-tile stick-tile" id="stick-card-left" tabindex="-1" onclick="openStickEditor('left')">
+              <div class="bind-label mono"><span>🕹️ Stick gauche</span><span>LS</span></div>
+              <div class="bind-action" id="stick-action-left"></div>
+              <div class="stick-meta" id="stick-meta-left"></div>
+            </button>
+            <button type="button" class="bind-tile stick-tile" id="stick-card-right" tabindex="-1" onclick="openStickEditor('right')">
+              <div class="bind-label mono"><span>🕹️ Stick droit</span><span>RS</span></div>
+              <div class="bind-action" id="stick-action-right"></div>
+              <div class="stick-meta" id="stick-meta-right"></div>
+            </button>
+            <div class="bind-tile touchpad-tile">
+                <div class="analog-box-title">
+                  <span>👆 Trackpad PS5 (1 & 2 Doigts)</span>
+                  <b id="tp-sens-val" class="mono">1.2x</b>
+                </div>
+                <label class="switch-wrap" style="margin-top:2px;">
+                  <input type="checkbox" id="tp-enable-toggle" tabindex="-1" checked onchange="saveCurrentProfile(true)">
+                  <span class="switch-track"></span>
+                  <span style="font-size:11px;">1 doigt=Souris / 2 doigts=Scroll</span>
+                </label>
+                <input type="range" id="tp-sens-slider" tabindex="-1" min="0.4" max="3.0" step="0.1" value="1.2" style="margin-top:4px;" oninput="updateTouchpadSens(this.value, true)">
             </div>
-            <input type="range" id="sens-slider" tabindex="-1" min="4" max="32" step="1" value="14" style="margin-top:6px;" oninput="updateMouseSens(this.value, true)">
-            <span style="font-size:10px; color:var(--text-muted);">Courbe progressive au stick</span>
-          </div>
-
-          <div class="analog-box">
-            <div class="analog-box-title">
-              <span>👆 Trackpad PS5 (1 & 2 Doigts)</span>
-              <b id="tp-sens-val" class="mono">1.2x</b>
             </div>
-            <label class="switch-wrap" style="margin-top:2px;">
-              <input type="checkbox" id="tp-enable-toggle" tabindex="-1" checked onchange="saveCurrentProfile(true)">
-              <span class="switch-track"></span>
-              <span style="font-size:11px;">1 doigt=Souris / 2 doigts=Scroll</span>
-            </label>
-            <input type="range" id="tp-sens-slider" tabindex="-1" min="0.4" max="3.0" step="0.1" value="1.2" style="margin-top:4px;" oninput="updateTouchpadSens(this.value, true)">
           </div>
+
+          <div class="bind-toolbar">
+            <span class="bind-toolbar-hint">Cliquez sur un bouton pour lui associer une action : touche, combinaison, macro, application, texte, lien…</span>
+            <button class="btn ghost-danger" tabindex="-1" onclick="clearAllMappings()">Tout réinitialiser</button>
+          </div>
+          <div id="mapping-grid" class="bind-groups"></div>
         </div>
 
-        <div class="bind-toolbar">
-          <span class="bind-toolbar-hint">Cliquez sur un bouton pour lui associer une action : touche, combinaison, macro, application, texte, lien…</span>
-          <button class="btn ghost-danger" tabindex="-1" onclick="clearAllMappings()">Tout réinitialiser</button>
+        <div class="glass-card" id="profile-hw-card">
+          <div class="card-top">
+            <div>
+              <div class="card-title">🎛️ Matériel du profil (PS5 / PS4)</div>
+              <div class="card-subtitle">Gâchettes et couleur enregistrées dans ce profil, appliquées automatiquement à son activation</div>
+            </div>
+          </div>
+          <div class="profile-hw-grid">
+            <div class="profile-hw-block">
+              <div class="row-between" style="margin-bottom:8px; flex-wrap:wrap;">
+                <div>
+                  <strong style="font-size:13px; color:#60a5fa;">🎯 Gâchettes adaptatives (L2 / R2)</strong>
+                  <div style="font-size:11px; color:var(--text-muted);">Envoi direct par USB (0x02) et Bluetooth signé CRC-32 (0x31)</div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                  <button class="btn ok-btn" tabindex="-1" onclick="resetTriggersToDefaultUI()" title="Envoie le code 0x05 pour relâcher immédiatement les moteurs L2 et R2">
+                    🟢 Relâcher L2/R2 (Défaut)
+                  </button>
+                  <button class="btn primary" tabindex="-1" onclick="applyAdaptiveTriggersNow()">
+                    ⚡ Tester sur la PS5
+                  </button>
+                </div>
+              </div>
+
+              <div class="analog-config-bar" style="grid-template-columns: 1fr 1fr;">
+                <div class="analog-box">
+                  <div class="analog-box-title">
+                    <span>Gâchette Gauche (L2)</span>
+                    <b id="l2-force-val" class="mono">180</b>
+                  </div>
+                  <select id="l2-mode-select" tabindex="-1" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true); this.blur();">
+                    <option value="off">🟢 Souple / Par Défaut (Aucune résistance)</option>
+                    <option value="continuous">🧱 Résistance Continue (Pédale lourde)</option>
+                    <option value="section">🔫 Cranté / Point Dur (Détente Arme)</option>
+                    <option value="vibration">⚡ Pulsation Auto (Mitraillette / ABS)</option>
+                  </select>
+                  <input type="range" id="l2-force-slider" tabindex="-1" min="40" max="255" step="5" value="180" style="margin-top:4px;" oninput="document.getElementById('l2-force-val').innerText = this.value" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true);">
+                </div>
+
+                <div class="analog-box">
+                  <div class="analog-box-title">
+                    <span>Gâchette Droite (R2)</span>
+                    <b id="r2-force-val" class="mono">180</b>
+                  </div>
+                  <select id="r2-mode-select" tabindex="-1" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true); this.blur();">
+                    <option value="off">🟢 Souple / Par Défaut (Aucune résistance)</option>
+                    <option value="continuous">🧱 Résistance Continue (Pédale lourde)</option>
+                    <option value="section">🔫 Cranté / Point Dur (Détente Arme)</option>
+                    <option value="vibration">⚡ Pulsation Auto (Mitraillette / ABS)</option>
+                  </select>
+                  <input type="range" id="r2-force-slider" tabindex="-1" min="40" max="255" step="5" value="180" style="margin-top:4px;" oninput="document.getElementById('r2-force-val').innerText = this.value" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true);">
+                </div>
+              </div>
+            </div>
+            <div class="profile-hw-block">
+              <div class="row-between" style="margin-bottom:8px;">
+                <div>
+                  <strong style="font-size:13px; color:#60a5fa;">💡 Barre lumineuse</strong>
+                  <div style="font-size:11px; color:var(--text-muted);">Couleur appliquée à la manette quand ce profil s'active</div>
+                </div>
+                <label class="color-custom" title="Couleur personnalisée">🎨 <input type="color" id="lightbar-custom" tabindex="-1" value="#0066ff" oninput="onCustomLightbarInput(this.value)" onchange="saveCurrentProfile(true)"></label>
+              </div>
+              <div id="lightbar-preview" class="lightbar-preview">Aperçu Halo Lightbar</div>
+              <div class="swatch-bar" id="swatch-container"></div>
+            </div>
+          </div>
         </div>
-        <div id="mapping-grid" class="bind-groups"></div>
       </div>
 
     </div>
@@ -1150,51 +1235,9 @@
           <button class="btn" tabindex="-1" onclick="connectWebHID()">🔌 Forcer Liaison Directe WebHID</button>
         </div>
 
-        <div style="border-top:1px solid var(--border-subtle); padding-top:12px;">
-          <div class="row-between" style="margin-bottom:8px; flex-wrap:wrap;">
-            <div>
-              <strong style="font-size:13px; color:#60a5fa;">🎯 Gâchettes Adaptatives PS5 DualSense (L2 & R2)</strong>
-              <div style="font-size:11px; color:var(--text-muted);">Envoi direct par USB (0x02) et Bluetooth signé CRC-32 (0x31)</div>
-            </div>
-            <div style="display:flex; gap:8px;">
-              <button class="btn ok-btn" tabindex="-1" onclick="resetTriggersToDefaultUI()" title="Envoie le code 0x05 pour relâcher immédiatement les moteurs L2 et R2">
-                🟢 Relâcher L2/R2 (Défaut)
-              </button>
-              <button class="btn primary" tabindex="-1" onclick="applyAdaptiveTriggersNow()">
-                ⚡ Tester sur la PS5
-              </button>
-            </div>
-          </div>
-
-          <div class="analog-config-bar" style="grid-template-columns: 1fr 1fr;">
-            <div class="analog-box">
-              <div class="analog-box-title">
-                <span>Gâchette Gauche (L2)</span>
-                <b id="l2-force-val" class="mono">180</b>
-              </div>
-              <select id="l2-mode-select" tabindex="-1" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true); this.blur();">
-                <option value="off">🟢 Souple / Par Défaut (Aucune résistance)</option>
-                <option value="continuous">🧱 Résistance Continue (Pédale lourde)</option>
-                <option value="section">🔫 Cranté / Point Dur (Détente Arme)</option>
-                <option value="vibration">⚡ Pulsation Auto (Mitraillette / ABS)</option>
-              </select>
-              <input type="range" id="l2-force-slider" tabindex="-1" min="40" max="255" step="5" value="180" style="margin-top:4px;" oninput="document.getElementById('l2-force-val').innerText = this.value" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true);">
-            </div>
-
-            <div class="analog-box">
-              <div class="analog-box-title">
-                <span>Gâchette Droite (R2)</span>
-                <b id="r2-force-val" class="mono">180</b>
-              </div>
-              <select id="r2-mode-select" tabindex="-1" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true); this.blur();">
-                <option value="off">🟢 Souple / Par Défaut (Aucune résistance)</option>
-                <option value="continuous">🧱 Résistance Continue (Pédale lourde)</option>
-                <option value="section">🔫 Cranté / Point Dur (Détente Arme)</option>
-                <option value="vibration">⚡ Pulsation Auto (Mitraillette / ABS)</option>
-              </select>
-              <input type="range" id="r2-force-slider" tabindex="-1" min="40" max="255" step="5" value="180" style="margin-top:4px;" oninput="document.getElementById('r2-force-val').innerText = this.value" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true);">
-            </div>
-          </div>
+        <div class="moved-hint">
+          <span>🎯 Les <b>gâchettes adaptatives</b> et la <b>barre lumineuse</b> se règlent désormais dans chaque profil.</span>
+          <button class="btn" tabindex="-1" onclick="goToProfileHardware()">Ouvrir dans Profils →</button>
         </div>
 
         <div style="border-top:1px solid var(--border-subtle); padding-top:10px;">
@@ -1234,24 +1277,41 @@
           </div>
         </div>
 
-        <div class="glass-card">
-          <div class="card-top">
-            <div>
-              <div class="card-title">LED / Lightbar Sony (PS4 & PS5 DualSense)</div>
-              <div class="card-subtitle">Personnalisation lumineuse par profil</div>
-            </div>
-          </div>
-
-          <div id="lightbar-preview" class="lightbar-preview">Aperçu Halo Lightbar</div>
-          <div class="swatch-bar" id="swatch-container"></div>
-        </div>
-
       </div>
 
     </div>
   </section>
 
 </main>
+
+<!-- =========================================================
+     FENÊTRE : ÉDITEUR D'UN STICK (placée avant l'éditeur d'action, qui s'ouvre par-dessus pour les directions)
+     ========================================================= -->
+<div id="stick-modal" class="modal-backdrop" onmousedown="if (event.target === this) closeStickEditor()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="stick-modal-title">
+    <div class="modal-head">
+      <div>
+        <div id="stick-modal-title" class="modal-title">Configurer le stick</div>
+        <div id="stick-modal-sub" class="modal-sub"></div>
+      </div>
+      <button class="modal-close" title="Fermer (Échap)" onclick="closeStickEditor()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <span class="field-label">Comportement du stick</span>
+        <div id="stick-kind-picker" class="kind-picker"></div>
+      </div>
+      <div id="stick-editor-panel"></div>
+      <div id="stick-editor-error" class="field-error"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="field-hint">Enregistré dans le profil « <b id="stick-modal-profile"></b> »</span>
+      <span class="spacer"></span>
+      <button class="btn" onclick="closeStickEditor()">Annuler</button>
+      <button class="btn primary" onclick="saveStickEditor()">Enregistrer</button>
+    </div>
+  </div>
+</div>
 
 <!-- =========================================================
      FENÊTRE : ÉDITEUR D'ACTION D'UN BOUTON
@@ -1320,7 +1380,6 @@ let activeGpIndex = 99;
 let hiddenGhostIndices = new Set();
 let mappingMasterEnabled = true;
 let deadzone = 0.08;
-let mouseSensitivity = 14;
 let touchpadSensitivity = 1.2;
 let lsMaxDrift = 0, rsMaxDrift = 0;
 let l2Max = 0, r2Max = 0;
@@ -1797,7 +1856,7 @@ function parseMappingAction(raw) {
   try {
     if (raw.startsWith(ACTION_PREFIXES.launch)) {
       const t = JSON.parse(raw.substring(ACTION_PREFIXES.launch.length));
-      return { kind: 'launch', path: t.path || '', args: t.args || '' };
+      return { kind: 'launch', path: t.path || '', args: t.args || '', profileId: t.profileId || LAUNCH_PROFILE_AUTO };
     }
     if (raw.startsWith(ACTION_PREFIXES.macro)) {
       const steps = JSON.parse(raw.substring(ACTION_PREFIXES.macro.length));
@@ -1813,7 +1872,11 @@ function serializeMappingAction(a) {
   switch (a.kind) {
     case 'preset': return a.value;
     case 'key': case 'hold': case 'turbo': case 'text': case 'url': return ACTION_PREFIXES[a.kind] + a.value;
-    case 'launch': return ACTION_PREFIXES.launch + JSON.stringify({ path: a.path, args: a.args || '' });
+    case 'launch': {
+      const target = { path: a.path, args: a.args || '' };
+      if (a.profileId) target.profileId = a.profileId; // absent = automatique (compatible avec les anciens raccourcis)
+      return ACTION_PREFIXES.launch + JSON.stringify(target);
+    }
     case 'macro': return ACTION_PREFIXES.macro + JSON.stringify(a.steps);
     default: return NATIVE_ACTION;
   }
@@ -1841,7 +1904,10 @@ function describeAction(raw) {
       try { host = new URL(a.value).hostname; } catch (e) {}
       return { icon: '🌐', text: host };
     }
-    case 'launch': return { icon: '🚀', text: fileNameOf(a.path) };
+    case 'launch': {
+      const prof = launchProfileLabel(a.profileId, true);
+      return { icon: '🚀', text: prof ? `${fileNameOf(a.path)} → ${prof}` : fileNameOf(a.path) };
+    }
     case 'macro': return { icon: '🧩', text: `Macro · ${a.steps.length} étape${a.steps.length > 1 ? 's' : ''}` };
     default: return { icon: '🎮', text: 'Natif (aucune action)' };
   }
@@ -1944,8 +2010,8 @@ function refreshMappingHighlights() {
       renderBindTile(i);
     }
   }
-  const lsMode = document.getElementById('ls-mode-select')?.value || 'native';
-  const rsMode = document.getElementById('rs-mode-select')?.value || 'native';
+  const lsMode = currentSticks.left.mode;
+  const rsMode = currentSticks.right.mode;
   const stickExtra = (lsMode !== 'native' ? 1 : 0) + (rsMode !== 'native' ? 1 : 0);
 
   document.getElementById('mapped-count-badge').innerText =
@@ -2019,15 +2085,61 @@ const QUICK_APPS = [
 
 const PRESET_ACTIONS = () => MAPPING_ACTIONS.filter(a => a !== NATIVE_ACTION);
 
-let actionEditor = null; // { index, draft }
+const LAUNCH_PROFILE_AUTO = '';
+const LAUNCH_PROFILE_KEEP = '__keep__';
+const LAUNCH_PROFILE_ASK = '__ask__';
+
+// short = libellé court pour les tuiles (rien en mode automatique)
+function launchProfileLabel(profileId, short = false) {
+  if (!profileId) return short ? '' : 'Automatique';
+  if (profileId === LAUNCH_PROFILE_KEEP) return short ? 'profil inchangé' : 'Garder le profil actuel';
+  if (profileId === LAUNCH_PROFILE_ASK) return short ? 'choix au lancement' : 'Demander à chaque lancement';
+  const p = profiles.find(x => x.id === profileId);
+  return p ? p.name : (short ? 'profil supprimé (auto)' : 'Profil supprimé → automatique');
+}
+
+function makeLaunchProfileSelect(d) {
+  const sel = document.createElement('select');
+  const add = (value, label) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    sel.appendChild(opt);
+  };
+  add(LAUNCH_PROFILE_AUTO, '🔄 Automatique (profil associé à l’exe, sinon profil actuel)');
+  add(LAUNCH_PROFILE_ASK, '❓ Demander à chaque lancement (choix à la manette)');
+  add(LAUNCH_PROFILE_KEEP, '↩️ Garder le profil actuel');
+  profiles.forEach(p => add(p.id, `🎮 ${p.name}`));
+  // Profil mémorisé puis supprimé : on l'affiche pour que l'utilisateur voie le repli automatique
+  if (d.profileId && ![...sel.options].some(o => o.value === d.profileId)) add(d.profileId, '⚠️ Profil supprimé → automatique');
+  sel.value = d.profileId || LAUNCH_PROFILE_AUTO;
+  sel.onchange = () => { d.profileId = sel.value; };
+  return sel;
+}
+
+let actionEditor = null; // { target, draft }
 let pendingFilePick = null; // { requestId, apply(path) }
 
 function openActionEditor(index) {
-  const current = document.getElementById(`map-btn-${index}`).value;
-  actionEditor = { index, draft: parseMappingAction(current) };
+  openActionEditorFor({
+    title: `${BUTTON_SHORT[index]} (B${index})`,
+    current: document.getElementById(`map-btn-${index}`).value,
+    logLabel: `B${index} (${BUTTON_SHORT[index]})`,
+    onSave: value => {
+      document.getElementById(`map-btn-${index}`).value = value;
+      refreshMappingHighlights();
+      saveCurrentProfile(true);
+    }
+  });
+}
+
+// target = { title, current, logLabel, onSave(value) } : sert aux boutons comme aux directions des sticks
+function openActionEditorFor(target) {
+  const current = target.current;
+  actionEditor = { target, draft: parseMappingAction(current) };
   if (actionEditor.draft.kind === 'macro' && !Array.isArray(actionEditor.draft.steps)) actionEditor.draft.steps = [];
 
-  document.getElementById('action-modal-title').textContent = `Configurer : ${BUTTON_SHORT[index]} (B${index})`;
+  document.getElementById('action-modal-title').textContent = `Configurer : ${target.title}`;
   document.getElementById('action-modal-sub').textContent = `Actuellement : ${describeAction(current).text}`;
   document.getElementById('action-test-status').textContent = '';
   renderKindPicker();
@@ -2066,7 +2178,7 @@ function switchDraftKind(kind) {
   if (keyLike.includes(kind) && keyLike.includes(old.kind)) draft.value = old.value;
   else if (kind === 'preset') draft.value = PRESET_ACTIONS()[0];
   else if (kind === 'macro') draft.steps = [];
-  else if (kind === 'launch') { draft.path = ''; draft.args = ''; }
+  else if (kind === 'launch') { draft.path = ''; draft.args = ''; draft.profileId = LAUNCH_PROFILE_AUTO; }
   else if (kind !== 'none') draft.value = '';
   actionEditor.draft = draft;
   document.getElementById('action-editor-error').textContent = '';
@@ -2241,6 +2353,9 @@ function renderEditorPanel() {
 
       panel.appendChild(makeField('Programme', row, 'Un .exe, un raccourci .lnk ou un lien d’application (ex. steam://rungameid/730).'));
       panel.appendChild(makeField('Arguments (facultatif)', makeTextInput(d.args, 'Ex : --fullscreen', set('args'))));
+      panel.appendChild(makeField('Profil manette au lancement', makeLaunchProfileSelect(d),
+        'Le profil est activé avant le lancement et réappliqué quand l’appli repasse au premier plan. ' +
+        'Automatique : profil dont la liste d’exe contient l’appli, sinon le profil actuel est conservé.'));
       panel.appendChild(makeField('Raccourcis', chips));
       break;
     }
@@ -2389,7 +2504,7 @@ function validateDraft(d) {
       return serializeMappingAction({ kind: 'url', value: d.value.trim() });
     case 'launch':
       if (!d.path || !d.path.trim()) throw new Error('Indiquez le programme à lancer (bouton « Parcourir… »).');
-      return serializeMappingAction({ kind: 'launch', path: d.path.trim(), args: (d.args || '').trim() });
+      return serializeMappingAction({ kind: 'launch', path: d.path.trim(), args: (d.args || '').trim(), profileId: d.profileId || LAUNCH_PROFILE_AUTO });
     case 'macro': {
       if (!d.steps.length) throw new Error('Ajoutez au moins une étape à la macro.');
       const steps = d.steps.map((s, i) => {
@@ -2433,12 +2548,10 @@ function saveEditedAction() {
     document.getElementById('action-editor-error').textContent = err.message;
     return;
   }
-  const index = actionEditor.index;
-  document.getElementById(`map-btn-${index}`).value = value;
+  const target = actionEditor.target;
   closeActionEditor();
-  refreshMappingHighlights();
-  saveCurrentProfile(true);
-  logEvent(`B${index} (${BUTTON_SHORT[index]}) → ${describeAction(value).text}`, 'ok');
+  target.onSave(value);
+  logEvent(`${target.logLabel} → ${describeAction(value).text}`, 'ok');
 }
 
 let testCountdownTimer = null;
@@ -2490,7 +2603,10 @@ function onFilePicked(data) {
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (document.getElementById('confirm-modal').classList.contains('open')) { e.preventDefault(); resolveConfirm(false); }
-    else if (document.getElementById('action-modal').classList.contains('open') && !document.activeElement?.classList.contains('key-capture')) { e.preventDefault(); closeActionEditor(); }
+    else if (document.getElementById('action-modal').classList.contains('open')) {
+      if (!document.activeElement?.classList.contains('key-capture')) { e.preventDefault(); closeActionEditor(); }
+    }
+    else if (document.getElementById('stick-modal').classList.contains('open')) { e.preventDefault(); closeStickEditor(); }
   }
 });
 
@@ -2510,6 +2626,285 @@ function listExternalActions(profileList) {
     });
   });
   return found;
+}
+
+// =====================================================================
+// PROFILS — migration (même logique que Models/ProfileMigration.cs côté C#)
+// =====================================================================
+const PROFILE_SETTINGS_VERSION = 2;
+const STICK_MODES = ['native', 'mouse', 'scroll', 'wasd', 'arrows', 'actions'];
+const TRIGGER_MODES = ['off', 'continuous', 'section', 'vibration'];
+const STICK_DIRECTIONS = ['up', 'down', 'left', 'right'];
+
+function defaultStick(mode = 'native', sensitivity = 14, deadzone = 0.08) {
+  return { mode, sensitivity, deadzone, invertY: false, directions: {} };
+}
+
+function sanitizeStick(s, p) {
+  const out = { ...defaultStick(), ...(s || {}) };
+  if (!STICK_MODES.includes(out.mode)) out.mode = 'native';
+  if (!(out.sensitivity > 0 && out.sensitivity <= 64)) out.sensitivity = p.mouseSensitivity;
+  if (!(out.deadzone >= 0 && out.deadzone <= 0.5)) out.deadzone = p.deadzone;
+  out.invertY = out.invertY === true;
+  const dirs = {};
+  STICK_DIRECTIONS.forEach(d => { if (out.directions && out.directions[d]) dirs[d] = out.directions[d]; });
+  out.directions = dirs;
+  return out;
+}
+
+// v1 → v2 : vitesse et zone morte communes recopiées dans chaque stick ; gâchettes et couleur complétées
+function migrateProfile(p) {
+  if (!p || typeof p !== 'object') return p;
+  if (typeof p.exe !== 'string') p.exe = '';
+  if (!p.name) p.name = 'Profil';
+  if (!p.buttonMapping || typeof p.buttonMapping !== 'object') p.buttonMapping = {};
+  if (!p.color || typeof p.color !== 'object') p.color = { r: 0, g: 102, b: 255 };
+  if (!(p.deadzone >= 0 && p.deadzone <= 0.5)) p.deadzone = 0.08;
+  if (!(p.mouseSensitivity > 0)) p.mouseSensitivity = 14;
+  if (typeof p.touchpadMouseEnabled !== 'boolean') p.touchpadMouseEnabled = true;
+  if (!(p.touchpadSensitivity > 0)) p.touchpadSensitivity = 1.2;
+  if (!TRIGGER_MODES.includes(p.l2TriggerMode)) p.l2TriggerMode = 'off';
+  if (!TRIGGER_MODES.includes(p.r2TriggerMode)) p.r2TriggerMode = 'off';
+  if (!(p.l2TriggerForce > 0)) p.l2TriggerForce = 180;
+  if (!(p.r2TriggerForce > 0)) p.r2TriggerForce = 180;
+
+  p.leftStick = sanitizeStick(p.leftStick || defaultStick(p.leftStickMode || 'native', p.mouseSensitivity, p.deadzone), p);
+  p.rightStick = sanitizeStick(p.rightStick || defaultStick(p.rightStickMode || 'native', p.mouseSensitivity, p.deadzone), p);
+  p.leftStickMode = p.leftStick.mode;   // champs historiques gardés en phase
+  p.rightStickMode = p.rightStick.mode;
+  p.settingsVersion = PROFILE_SETTINGS_VERSION;
+  return p;
+}
+
+function migrateProfiles(list) {
+  (list || []).forEach(migrateProfile);
+  return list;
+}
+
+// =====================================================================
+// STICKS — mêmes écrans que les raccourcis : tuile → fenêtre d'édition
+// =====================================================================
+let currentSticks = { left: defaultStick(), right: defaultStick() };
+let stickEditor = null; // { side, draft }
+
+const STICK_KINDS = [
+  { id: 'native', icon: '🎮', label: 'Natif', desc: 'Le jeu lit le stick' },
+  { id: 'mouse', icon: '🖱️', label: 'Souris', desc: 'Déplace le curseur' },
+  { id: 'scroll', icon: '↕️', label: 'Molette', desc: 'Défilement vertical' },
+  { id: 'wasd', icon: '⌨️', label: 'ZQSD / WASD', desc: 'Déplacement clavier' },
+  { id: 'arrows', icon: '⬆️', label: 'Flèches', desc: 'Touches directionnelles' },
+  { id: 'actions', icon: '🧩', label: 'Directions perso', desc: 'Une action par direction' }
+];
+
+const DIRECTION_LABELS = { up: '⬆️ Haut', down: '⬇️ Bas', left: '⬅️ Gauche', right: '➡️ Droite' };
+const STICK_NAMES = { left: 'Stick gauche (LS)', right: 'Stick droit (RS)' };
+
+function describeStick(s) {
+  const kind = STICK_KINDS.find(k => k.id === s.mode) || STICK_KINDS[0];
+  let meta = '';
+  if (s.mode === 'mouse' || s.mode === 'scroll') meta = `Vitesse ${Math.round(s.sensitivity)} · zone morte ${s.deadzone.toFixed(2)}`;
+  else if (s.mode === 'actions') {
+    const n = STICK_DIRECTIONS.filter(d => s.directions[d] && s.directions[d] !== NATIVE_ACTION).length;
+    meta = `${n} direction${n > 1 ? 's' : ''} configurée${n > 1 ? 's' : ''} · zone morte ${s.deadzone.toFixed(2)}`;
+  } else if (s.mode !== 'native') meta = `Zone morte ${s.deadzone.toFixed(2)}`;
+  else meta = 'Aucune action Windows';
+  if (s.invertY && s.mode !== 'native') meta += ' · Y inversé';
+  return { icon: kind.icon, text: kind.label, meta };
+}
+
+function renderStickTiles() {
+  ['left', 'right'].forEach(side => {
+    const s = currentSticks[side];
+    const d = describeStick(s);
+    const box = document.getElementById(`stick-action-${side}`);
+    const meta = document.getElementById(`stick-meta-${side}`);
+    const tile = document.getElementById(`stick-card-${side}`);
+    if (!box || !tile) return;
+    box.innerHTML = '';
+    const icon = document.createElement('span');
+    icon.textContent = d.icon;
+    const text = document.createElement('span');
+    text.className = 'bind-action-text';
+    text.textContent = d.text;
+    box.append(icon, text);
+    meta.textContent = d.meta;
+    tile.classList.toggle('active-bind', s.mode !== 'native');
+    tile.title = `${STICK_NAMES[side]} : ${d.text} — ${d.meta} (cliquer pour modifier)`;
+  });
+}
+
+function openStickEditor(side) {
+  stickEditor = { side, draft: JSON.parse(JSON.stringify(currentSticks[side])) };
+  document.getElementById('stick-modal-title').textContent = `Configurer : ${STICK_NAMES[side]}`;
+  document.getElementById('stick-modal-sub').textContent = `Actuellement : ${describeStick(currentSticks[side]).text}`;
+  document.getElementById('stick-modal-profile').textContent = profiles[activeProfileIdx]?.name || '';
+  document.getElementById('stick-editor-error').textContent = '';
+  renderStickKindPicker();
+  renderStickPanel();
+  document.getElementById('stick-modal').classList.add('open');
+}
+
+function closeStickEditor() {
+  document.getElementById('stick-modal').classList.remove('open');
+  stickEditor = null;
+}
+
+function renderStickKindPicker() {
+  const picker = document.getElementById('stick-kind-picker');
+  picker.innerHTML = '';
+  STICK_KINDS.forEach(k => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'kind-option' + (stickEditor.draft.mode === k.id ? ' selected' : '');
+    const b = document.createElement('b');
+    b.textContent = `${k.icon} ${k.label}`;
+    const s = document.createElement('span');
+    s.textContent = k.desc;
+    btn.append(b, s);
+    btn.onclick = () => { stickEditor.draft.mode = k.id; renderStickKindPicker(); renderStickPanel(); };
+    picker.appendChild(btn);
+  });
+}
+
+function makeSlider(min, max, step, value, format, onInput) {
+  const row = document.createElement('div');
+  row.className = 'slider-row';
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = min; input.max = max; input.step = step; input.value = value;
+  const out = document.createElement('b');
+  out.className = 'mono';
+  out.textContent = format(+value);
+  input.oninput = () => { out.textContent = format(+input.value); onInput(+input.value); };
+  row.append(input, out);
+  return row;
+}
+
+function makeSwitch(label, checked, onChange) {
+  const wrap = document.createElement('label');
+  wrap.className = 'switch-wrap';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  input.onchange = () => onChange(input.checked);
+  const track = document.createElement('span');
+  track.className = 'switch-track';
+  const text = document.createElement('span');
+  text.style.fontSize = '12px';
+  text.textContent = label;
+  wrap.append(input, track, text);
+  return wrap;
+}
+
+function renderStickPanel() {
+  const panel = document.getElementById('stick-editor-panel');
+  panel.innerHTML = '';
+  const d = stickEditor.draft;
+
+  if (d.mode === 'native') {
+    const p = document.createElement('div');
+    p.className = 'empty-hint';
+    p.textContent = 'Le stick est transmis tel quel au jeu : aucune action Windows n’est simulée.';
+    panel.appendChild(p);
+    return;
+  }
+
+  if (d.mode === 'mouse' || d.mode === 'scroll') {
+    panel.appendChild(makeField(d.mode === 'mouse' ? 'Vitesse du curseur' : 'Vitesse de défilement',
+      makeSlider(4, 32, 1, d.sensitivity, v => String(Math.round(v)), v => { d.sensitivity = v; }),
+      d.mode === 'mouse' ? 'Courbe progressive : précis au centre, rapide en bout de course.' : '14 = vitesse standard de la molette.'));
+  }
+
+  panel.appendChild(makeField('Zone morte',
+    makeSlider(0, 0.35, 0.01, d.deadzone, v => v.toFixed(2), v => { d.deadzone = v; }),
+    'Mouvement ignoré autour du centre (augmentez-la si le stick dérive). Voir l’onglet Diagnostic pour mesurer la dérive.'));
+
+  panel.appendChild(makeField('Options', makeSwitch('Inverser l’axe vertical (haut ↔ bas)', d.invertY, v => { d.invertY = v; })));
+
+  if (d.mode === 'actions') {
+    const pad = document.createElement('div');
+    pad.className = 'dir-pad';
+    STICK_DIRECTIONS.forEach(dir => {
+      const tile = document.createElement('button');
+      tile.type = 'button';
+      tile.className = `bind-tile dir-${dir}` + (d.directions[dir] && d.directions[dir] !== NATIVE_ACTION ? ' active-bind' : '');
+      const label = document.createElement('div');
+      label.className = 'bind-label mono';
+      label.textContent = DIRECTION_LABELS[dir];
+      const action = document.createElement('div');
+      action.className = 'bind-action';
+      const desc = describeAction(d.directions[dir] || NATIVE_ACTION);
+      const icon = document.createElement('span');
+      icon.textContent = desc.icon;
+      const text = document.createElement('span');
+      text.className = 'bind-action-text';
+      text.textContent = d.directions[dir] ? desc.text : 'Aucune action';
+      action.append(icon, text);
+      tile.append(label, action);
+      // Même éditeur que les boutons : toutes les actions sont disponibles (touche, maintien, turbo, macro…)
+      tile.onclick = () => openActionEditorFor({
+        title: `${STICK_NAMES[stickEditor.side]} — ${DIRECTION_LABELS[dir]}`,
+        current: d.directions[dir] || NATIVE_ACTION,
+        logLabel: `${stickEditor.side === 'left' ? 'LS' : 'RS'} ${DIRECTION_LABELS[dir]}`,
+        onSave: value => {
+          if (value === NATIVE_ACTION) delete d.directions[dir];
+          else d.directions[dir] = value;
+          renderStickPanel();
+        }
+      });
+      pad.appendChild(tile);
+    });
+    const center = document.createElement('div');
+    center.className = 'dir-center';
+    center.textContent = '🕹️';
+    pad.appendChild(center);
+    panel.appendChild(makeField('Action de chaque direction', pad,
+      'Astuce : « Maintenir » garde la touche enfoncée tant que le stick est poussé (idéal pour avancer / courir). Les diagonales déclenchent deux directions.'));
+  }
+}
+
+function saveStickEditor() {
+  if (!stickEditor) return;
+  const d = stickEditor.draft;
+  if (d.mode === 'actions' && !STICK_DIRECTIONS.some(dir => d.directions[dir])) {
+    document.getElementById('stick-editor-error').textContent = 'Associez une action à au moins une direction, ou choisissez un autre comportement.';
+    return;
+  }
+  const side = stickEditor.side;
+  currentSticks[side] = sanitizeStick(d, profiles[activeProfileIdx] || { mouseSensitivity: 14, deadzone: 0.08 });
+  closeStickEditor();
+  renderStickTiles();
+  refreshMappingHighlights();
+  saveCurrentProfile(true);
+  logEvent(`${STICK_NAMES[side]} → ${describeStick(currentSticks[side]).text}`, 'ok');
+}
+
+// =====================================================================
+// MATÉRIEL DU PROFIL : raccourci depuis l'onglet Périphériques, couleur libre
+// =====================================================================
+function goToProfileHardware() {
+  const tab = [...document.querySelectorAll('.nav-tab')].find(b => b.getAttribute('onclick')?.includes("'studio'"));
+  if (tab) switchView('studio', tab);
+  const card = document.getElementById('profile-hw-card');
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.classList.remove('profile-hw-flash');
+  void card.offsetWidth; // relance l'animation
+  card.classList.add('profile-hw-flash');
+}
+
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+  return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : null;
+}
+
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(v => toByte(v).toString(16).padStart(2, '0')).join('');
+}
+
+function onCustomLightbarInput(hex) {
+  const c = hexToRgb(hex);
+  if (c) selectLightbarSwatch(c.r, c.g, c.b);
 }
 
 function initProfiles() {
@@ -2537,6 +2932,7 @@ function initProfiles() {
   if (!profiles || profiles.length === 0) {
     profiles = getDefaultProfiles();
   }
+  migrateProfiles(profiles);
   ensureProfileIds(profiles);
   localStorage.setItem('gp_profiles', JSON.stringify(profiles));
   renderProfileList();
@@ -2553,7 +2949,7 @@ function renderProfileList() {
     const rawColor = p.color || { r: 0, g: 102, b: 255 };
     const c = { r: toByte(rawColor.r), g: toByte(rawColor.g), b: toByte(rawColor.b) };
     const mapCount = p.buttonMapping ? Object.keys(p.buttonMapping).length : 0;
-    const hasMouse = (p.leftStickMode === 'mouse' || p.rightStickMode === 'mouse' || p.touchpadMouseEnabled);
+    const hasMouse = ((p.leftStick || {}).mode === 'mouse' || (p.rightStick || {}).mode === 'mouse' || p.touchpadMouseEnabled);
     const hasTrig = (p.l2TriggerMode && p.l2TriggerMode !== 'off') || (p.r2TriggerMode && p.r2TriggerMode !== 'off');
 
     item.innerHTML = `
@@ -2583,17 +2979,15 @@ function loadProfileByIndex(idx, notifyBackend = true) {
   document.getElementById('dz-slider').value = dz;
   updateDeadzone(dz, false);
 
-  const sens = typeof p.mouseSensitivity === 'number' ? p.mouseSensitivity : 14;
-  document.getElementById('sens-slider').value = sens;
-  updateMouseSens(sens, false);
 
   document.getElementById('tp-enable-toggle').checked = (p.touchpadMouseEnabled !== false);
   const tpSens = typeof p.touchpadSensitivity === 'number' ? p.touchpadSensitivity : 1.2;
   document.getElementById('tp-sens-slider').value = tpSens;
   updateTouchpadSens(tpSens, false);
 
-  document.getElementById('ls-mode-select').value = p.leftStickMode || "native";
-  document.getElementById('rs-mode-select').value = p.rightStickMode || "native";
+  migrateProfile(p);
+  currentSticks = { left: JSON.parse(JSON.stringify(p.leftStick)), right: JSON.parse(JSON.stringify(p.rightStick)) };
+  renderStickTiles();
 
   document.getElementById('l2-mode-select').value = p.l2TriggerMode || "off";
   document.getElementById('l2-force-slider').value = p.l2TriggerForce || 180;
@@ -2631,8 +3025,6 @@ function saveCurrentProfile(silent = false) {
 
   const name = document.getElementById('prof-name').value.trim() || "Profil Custom";
   const exe = document.getElementById('prof-exe').value.trim() || "game.exe";
-  const leftStickMode = document.getElementById('ls-mode-select').value || "native";
-  const rightStickMode = document.getElementById('rs-mode-select').value || "native";
   const touchpadMouseEnabled = document.getElementById('tp-enable-toggle').checked;
 
   const l2TriggerMode = document.getElementById('l2-mode-select').value || "off";
@@ -2649,13 +3041,17 @@ function saveCurrentProfile(silent = false) {
   }
 
   profiles[activeProfileIdx] = {
+    settingsVersion: PROFILE_SETTINGS_VERSION,
     id: p.id || newProfileId(),
     name,
     exe,
     deadzone,
-    leftStickMode,
-    rightStickMode,
-    mouseSensitivity,
+    leftStick: JSON.parse(JSON.stringify(currentSticks.left)),
+    rightStick: JSON.parse(JSON.stringify(currentSticks.right)),
+    // Champs historiques (lus par les anciennes versions) : reflet du nouveau réglage
+    leftStickMode: currentSticks.left.mode,
+    rightStickMode: currentSticks.right.mode,
+    mouseSensitivity: currentSticks.left.sensitivity,
     touchpadMouseEnabled,
     touchpadSensitivity,
     l2TriggerMode,
@@ -2736,15 +3132,15 @@ async function applyPreset(type) {
     if (!ok) return;
   }
   for (let i = 0; i < 20; i++) document.getElementById(`map-btn-${i}`).value = NATIVE_ACTION;
-  document.getElementById('ls-mode-select').value = "native";
-  document.getElementById('rs-mode-select').value = "native";
+  currentSticks.left.mode = 'native';
+  currentSticks.right.mode = 'native';
   document.getElementById('l2-mode-select').value = "off";
   document.getElementById('r2-mode-select').value = "off";
   document.getElementById('tp-enable-toggle').checked = false;
 
   if (type === 'media') {
-    document.getElementById('ls-mode-select').value = "mouse";
-    document.getElementById('rs-mode-select').value = "scroll";
+    currentSticks.left.mode = 'mouse';
+    currentSticks.right.mode = 'scroll';
     document.getElementById('tp-enable-toggle').checked = true;
     document.getElementById('map-btn-0').value = "Play / Pause";
     document.getElementById('map-btn-1').value = "Plein Écran (F11)";
@@ -2757,8 +3153,8 @@ async function applyPreset(type) {
     document.getElementById('map-btn-18').value = "Plein Écran (F11)";
     document.getElementById('map-btn-19').value = "Mute";
   } else if (type === 'desktop') {
-    document.getElementById('ls-mode-select').value = "mouse";
-    document.getElementById('rs-mode-select').value = "scroll";
+    currentSticks.left.mode = 'mouse';
+    currentSticks.right.mode = 'scroll';
     document.getElementById('tp-enable-toggle').checked = true;
     document.getElementById('map-btn-0').value = "Clic Gauche Souris";
     document.getElementById('map-btn-1').value = "Clic Droit Souris";
@@ -2773,6 +3169,7 @@ async function applyPreset(type) {
     document.getElementById('l2-mode-select').value = "section";
     document.getElementById('r2-mode-select').value = "section";
   }
+  renderStickTiles();
   refreshMappingHighlights();
   saveCurrentProfile(false);
 }
@@ -2785,6 +3182,9 @@ function selectLightbarSwatch(r, g, b) {
   currentLightbar = { r, g, b };
   const rgbStr = `rgb(${r}, ${g}, ${b})`;
   const glowStr = `rgba(${r}, ${g}, ${b}, 0.28)`;
+
+  const customColor = document.getElementById('lightbar-custom');
+  if (customColor) customColor.value = rgbToHex(r, g, b);
 
   document.documentElement.style.setProperty('--accent', rgbStr);
   document.documentElement.style.setProperty('--accent-glow', glowStr);
@@ -3158,7 +3558,7 @@ function importProfilesFile(event) {
           danger: external.length > 0
         });
         if (!ok) return;
-        profiles = ensureProfileIds(imported);
+        profiles = ensureProfileIds(migrateProfiles(imported));
         localStorage.setItem('gp_profiles', JSON.stringify(profiles));
         loadProfileByIndex(0, true);
         saveCurrentProfile(false);
@@ -3175,12 +3575,6 @@ function updateDeadzone(val, autoSave = false) {
   deadzone = parseFloat(val);
   document.getElementById('dz-val').innerText = deadzone.toFixed(2);
   document.getElementById('dz-slider').value = deadzone;
-  if (autoSave) saveCurrentProfile(true);
-}
-
-function updateMouseSens(val, autoSave = false) {
-  mouseSensitivity = parseFloat(val);
-  document.getElementById('sens-val').innerText = Math.round(mouseSensitivity);
   if (autoSave) saveCurrentProfile(true);
 }
 
@@ -3224,7 +3618,7 @@ if (window.chrome && window.chrome.webview) {
 
     if (data.type === 'initState') {
       if (Array.isArray(data.profiles) && data.profiles.length > 0) {
-        profiles = data.profiles;
+        profiles = migrateProfiles(data.profiles);
         localStorage.setItem('gp_profiles', JSON.stringify(profiles));
       }
       if (typeof data.autoSwitch === 'boolean') {

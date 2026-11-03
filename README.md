@@ -44,7 +44,10 @@ Prérequis : [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) inst
 
 - **Manettes** : DualSense / DualShock 4 en direct HID (USB et Bluetooth), Xbox via XInput (fonctionne en arrière-plan). Option *Toutes les manettes actives* pour utiliser PS et Xbox en même temps.
 - **Profils par jeu** : bascule instantanée selon la fenêtre active, couleur de barre lumineuse, gâchettes adaptatives, sticks → souris / molette / ZQSD-WASD / flèches, pavé tactile → souris (1 doigt) et défilement (2 doigts).
-- **Raccourcis** : actions prédéfinies (multimédia, clics, Alt+Tab…) ou *Touche personnalisée* (ex. `Ctrl+Shift+S`, `F5`, `Win+E`).
+- **Raccourcis** (onglet Profils) : chaque bouton ouvre un éditeur — action rapide, touche / combinaison capturée au clavier, maintenir, turbo, texte, macro (suite d'étapes), lancer une application, ouvrir un site. Bouton *Tester*.
+- **Lancement d'appli avec profil** : un raccourci « Lancer une appli » mémorise le profil manette à activer (ou *Demander à chaque lancement*, fenêtre pilotable à la manette avec *Mémoriser ce choix*). Repli : profil associé à l'exe, sinon profil actuel.
+- **Sticks** : même éditeur que les boutons, réglages propres à chaque stick et à chaque profil — natif, souris, molette, ZQSD/WASD, flèches ou *directions personnalisées* (une action par direction), vitesse, zone morte, inversion Y.
+- **Matériel du profil** : gâchettes adaptatives PS5 et couleur de la barre lumineuse (nuancier ou couleur libre) enregistrées dans chaque profil. Les anciens profils sont migrés automatiquement (format v2).
 - **Pause depuis la manette** : PS + Options (PS5) ou View + Menu (Xbox) ; l'icône devient grise.
 - **Alertes** : batterie faible (20 %) et critique (10 %), logiciel en conflit détecté (DS4Windows, InputMapper, DSX), jeu lancé en administrateur (menu *Relancer en administrateur*).
 - **Journal** : `%LOCALAPPDATA%\ControllerManager\logs\controllermanager.log` (menu Outils → *Ouvrir le dossier des journaux*).
