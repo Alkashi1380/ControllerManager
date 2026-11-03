@@ -16,15 +16,26 @@ namespace ControllerManager
             }
         }
 
-        public static uint ComputeOutputCrc(byte[] packet74Bytes)
+        // Préfixes HID Bluetooth intégrés au CRC : 0xA1 = trame d'entrée, 0xA2 = trame de sortie
+        public const byte InputSeed = 0xA1;
+        public const byte OutputSeed = 0xA2;
+
+        public static uint ComputeOutputCrc(byte[] packet74Bytes) => Compute(OutputSeed, packet74Bytes, 74);
+
+        public static uint Compute(byte seed, byte[] data, int length)
         {
             uint crc = 0xFFFFFFFF;
-            crc = (crc >> 8) ^ Table[(crc ^ 0xA2) & 0xFF];
-            for (int i = 0; i < 74; i++)
+            crc = (crc >> 8) ^ Table[(crc ^ seed) & 0xFF];
+            for (int i = 0; i < length; i++)
             {
-                crc = (crc >> 8) ^ Table[(crc ^ packet74Bytes[i]) & 0xFF];
+                crc = (crc >> 8) ^ Table[(crc ^ data[i]) & 0xFF];
             }
             return ~crc;
         }
+
+        // Vérifie le CRC little-endian placé à la fin d'une trame Bluetooth de 78 octets
+        public static bool IsValidInputReport(byte[] report78Bytes) =>
+            report78Bytes.Length >= 78 &&
+            Compute(InputSeed, report78Bytes, 74) == BitConverter.ToUInt32(report78Bytes, 74);
     }
 }

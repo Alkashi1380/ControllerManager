@@ -9,6 +9,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Le projet de tests a son propre .csproj : ne pas compiler ses fichiers dans l'appli -->
+    <Compile Remove="ControllerManager.Tests\**" />
+    <None Remove="ControllerManager.Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
     <PackageReference Include="HidSharp" Version="2.1.0" />
   </ItemGroup>
