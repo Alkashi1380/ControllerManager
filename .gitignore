@@ -1,0 +1,13 @@
+# Sorties de build .NET
+bin/
+obj/
+publish/
+Release_Finale/
+
+# Données WebView2 créées à côté de l'exe par les anciennes versions
+*.WebView2/
+
+# IDE
+.vs/
+.vscode/
+*.user

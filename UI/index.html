@@ -1,0 +1,2399 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gamepad OS — Console Dashboard</title>
+<style>
+  :root {
+    --bg-deep: #070709;
+    --bg-surface: rgba(20, 20, 25, 0.75);
+    --bg-elevated: rgba(32, 32, 40, 0.65);
+    --bg-glass: rgba(255, 255, 255, 0.03);
+    --border-subtle: rgba(255, 255, 255, 0.07);
+    --border-focus: rgba(255, 255, 255, 0.18);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59, 130, 246, 0.35);
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: var(--bg-deep);
+    background-image: 
+      radial-gradient(circle at 15% 0%, var(--accent-glow) 0%, transparent 45%),
+      radial-gradient(circle at 85% 100%, rgba(16, 185, 129, 0.08) 0%, transparent 40%);
+    color: var(--text-primary);
+    font-family: 'Segoe UI Variable Display', 'Inter', system-ui, -apple-system, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+    transition: background-image 0.5s ease;
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .topbar {
+    height: 68px;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-subtle);
+    background: rgba(10, 10, 14, 0.6);
+    backdrop-filter: blur(20px);
+    z-index: 10;
+    gap: 12px;
+  }
+
+  .brand-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 310px;
+  }
+
+  .status-orb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--danger);
+    box-shadow: 0 0 12px var(--danger);
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+  }
+  .status-orb.connected {
+    background: var(--success);
+    box-shadow: 0 0 14px var(--success);
+  }
+
+  .controller-selector-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+  }
+
+  .gp-switcher {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    outline: none;
+    max-width: 310px;
+  }
+  .gp-switcher:hover, .gp-switcher:focus {
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .controller-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding-left: 4px;
+  }
+
+  .nav-pills {
+    display: flex;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-subtle);
+    padding: 4px;
+    border-radius: 999px;
+    gap: 4px;
+  }
+
+  .nav-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    outline: none;
+  }
+  .nav-tab:hover { color: var(--text-primary); }
+  .nav-tab.active {
+    background: var(--text-primary);
+    color: var(--bg-deep);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.18);
+  }
+
+  .sys-cluster {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .chip {
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .chip.ok { color: var(--success); border-color: rgba(16, 185, 129, 0.25); background: rgba(16, 185, 129, 0.08); }
+  .chip.warn { color: var(--warning); border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.1); }
+  .chip.err { color: var(--danger); border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1); }
+  .chip.accent { color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.12); }
+
+  .viewport {
+    flex: 1;
+    padding: 16px 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .view-section {
+    display: none;
+    flex: 1;
+    animation: fadeIn 0.22s ease-out;
+  }
+  .view-section.active {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .glass-card {
+    background: var(--bg-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.4);
+  }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .diag-grid {
+    display: grid;
+    grid-template-columns: 1.25fr 0.72fr 1.12fr;
+    gap: 16px;
+    flex: 1;
+  }
+  @media (max-width: 1100px) {
+    .diag-grid { grid-template-columns: 1fr; }
+  }
+
+  .sticks-stage {
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    gap: 12px;
+    padding: 2px 0;
+  }
+
+  .radar-module {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .radar-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  canvas.radar {
+    background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.4) 100%);
+    border: 1px solid var(--border-subtle);
+    border-radius: 50%;
+    box-shadow: inset 0 0 24px rgba(0,0,0,0.7);
+  }
+
+  /* Visualiseur temps réel du Pavé Tactile DualSense (1920x1080) */
+  .touchpad-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle);
+  }
+  canvas.touchpad-canvas {
+    width: 100%;
+    height: 92px;
+    background: linear-gradient(180deg, rgba(20, 24, 34, 0.85) 0%, rgba(10, 12, 18, 0.95) 100%);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    box-shadow: inset 0 0 18px rgba(0,0,0,0.8);
+  }
+
+  .telemetry-pills {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    width: 168px;
+  }
+  .tele-item {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 4px 7px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-secondary);
+  }
+  .tele-item b { color: var(--text-primary); }
+
+  .triggers-stage {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex: 1;
+    gap: 16px;
+  }
+  .trigger-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 45%;
+  }
+  .trigger-pillar {
+    width: 44px;
+    height: 185px;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    padding: 4px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+  }
+  .trigger-liquid {
+    width: 100%;
+    height: 0%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+    box-shadow: 0 0 18px var(--accent-glow);
+    transition: height 0.03s linear;
+  }
+
+  /* Matrice 20 Touches (4x5 incluant Pavé Gauche, Pavé Droit, PS et Mute Mic) */
+  .pad-matrix {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .pad-key {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 7px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    transition: all 0.08s ease;
+  }
+  .pad-key .key-id { font-size: 9px; color: var(--text-muted); }
+  .pad-key .key-name { font-size: 10.5px; font-weight: 600; color: var(--text-secondary); text-align: center; }
+
+  .pad-key.tested {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.05);
+  }
+  .pad-key.tested .key-name { color: var(--success); }
+
+  .pad-key.pressed {
+    background: var(--text-primary) !important;
+    border-color: #fff !important;
+    transform: scale(0.95);
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.35);
+  }
+  .pad-key.pressed .key-id, .pad-key.pressed .key-name { color: var(--bg-deep) !important; }
+
+  .pad-key.fault {
+    background: rgba(239, 68, 68, 0.25) !important;
+    border-color: var(--danger) !important;
+  }
+
+  .compact-debounce-panel {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 9px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .debounce-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+  .debounce-slider-row span {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .debounce-slider-row input[type="range"] {
+    flex: 1;
+    max-width: 100%;
+    height: 5px;
+    margin: 0;
+  }
+  .debounce-slider-row b {
+    font-size: 11px;
+    color: var(--text-primary);
+    min-width: 42px;
+    text-align: right;
+  }
+
+  .console-log {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    height: 92px;
+    overflow-y: auto;
+    padding: 8px 11px;
+    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--text-secondary);
+  }
+  .log-line.ok { color: var(--success); }
+  .log-line.warn { color: var(--warning); font-weight: 600; }
+  .log-line.fault { color: var(--danger); font-weight: 600; }
+
+  .studio-layout {
+    display: grid;
+    grid-template-columns: 310px 1fr;
+    gap: 18px;
+    flex: 1;
+  }
+  @media (max-width: 980px) {
+    .studio-layout { grid-template-columns: 1fr; }
+  }
+
+  .profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .profile-card-item {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 10px 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.16s ease;
+  }
+  .profile-card-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--border-focus);
+  }
+  .profile-card-item.active {
+    background: rgba(59, 130, 246, 0.14);
+    border-color: var(--accent);
+    box-shadow: 0 4px 20px -4px var(--accent-glow);
+  }
+
+  .prof-item-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .prof-color-orb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .prof-item-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+  .prof-item-exe { font-size: 11px; color: var(--text-muted); }
+
+  .analog-config-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(195px, 1fr));
+    gap: 12px;
+    background: rgba(59, 130, 246, 0.06);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: var(--radius-md);
+    padding: 11px 14px;
+  }
+  .analog-box {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .analog-box-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #60a5fa;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .studio-Mapping-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 8px;
+  }
+
+  .bind-tile {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: all 0.15s ease;
+  }
+  .bind-tile.active-bind {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--accent);
+  }
+  .bind-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex;
+    justify-content: space-between;
+  }
+  .bind-tile.active-bind .bind-label { color: #60a5fa; }
+
+  .hw-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 18px;
+  }
+  @media (max-width: 950px) {
+    .hw-grid { grid-template-columns: 1fr; }
+  }
+
+  .lightbar-preview {
+    height: 44px;
+    border-radius: var(--radius-md);
+    background: rgba(0, 68, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 35px rgba(0, 68, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+  }
+
+  .swatch-bar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 4px 0;
+  }
+  .color-orb {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.15);
+    transition: transform 0.15s ease, border-color 0.15s;
+  }
+  .color-orb:hover { transform: scale(1.1); }
+  .color-orb.selected {
+    border-color: #fff;
+    transform: scale(1.16);
+    box-shadow: 0 0 16px currentColor;
+  }
+
+  .slots-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .slot-row {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 9px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    gap: 8px;
+  }
+  .slot-row.active-slot {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.12);
+  }
+
+  .driver-tools-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .btn {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    padding: 7px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    outline: none;
+  }
+  .btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--border-focus);
+  }
+  .btn.primary {
+    background: var(--accent);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 4px 14px var(--accent-glow);
+  }
+  .btn.primary:hover { filter: brightness(1.1); }
+  .btn.ok-btn {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: var(--success);
+  }
+  .btn.ok-btn:hover { background: var(--success); color: #000; }
+  .btn.warn-btn {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: var(--warning);
+  }
+  .btn.warn-btn:hover { background: var(--warning); color: #000; }
+  .btn.ghost-danger {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.25);
+    color: var(--danger);
+  }
+  .btn.ghost-danger:hover { background: var(--danger); color: #fff; }
+
+  input[type="text"], select:not(.gp-switcher) {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 11.5px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  input[type="text"]:focus, select:focus { border-color: var(--accent); }
+  select option { background: #141419; color: #fff; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(0,0,0,0.5);
+  }
+
+  .row-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .switch-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .switch-wrap input { display: none; }
+  .switch-track {
+    width: 36px;
+    height: 19px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 999px;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .switch-track::after {
+    content: '';
+    width: 13px;
+    height: 13px;
+    background: #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.2s;
+  }
+  .switch-wrap input:checked + .switch-track { background: var(--accent); }
+  .switch-wrap input:checked + .switch-track::after { transform: translateX(17px); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand-area">
+    <div id="gp-orb" class="status-orb"></div>
+    <div class="controller-selector-wrap">
+      <select id="gp-selector" class="gp-switcher" tabindex="-1" onchange="onSelectControllerSlot(this.value); this.blur();">
+        <option value="99">[Pont Direct C#] Sony PS5 / PS4 (BT & USB)</option>
+      </select>
+      <div id="gp-vidpid" class="controller-sub mono">Prêt • Protection anti-navigation active</div>
+    </div>
+  </div>
+
+  <nav class="nav-pills">
+    <button class="nav-tab active" tabindex="-1" onclick="switchView('diag', this)">🕹️ Diagnostic & Touchpad</button>
+    <button class="nav-tab" tabindex="-1" onclick="switchView('studio', this)">🗂️ Profils, Sticks & 20 Touches</button>
+    <button class="nav-tab" tabindex="-1" onclick="switchView('hardware', this)">🛠️ Périphériques, Gâchettes PS5 & HUD</button>
+  </nav>
+
+  <div class="sys-cluster">
+    <button id="mapping-master-btn" class="btn primary" tabindex="-1" onclick="toggleMappingMaster()" title="Active ou met en pause les raccourcis, le pavé tactile et la souris au stick">
+      ⌨️ Raccourcis : Actifs
+    </button>
+    <span id="active-process-badge" class="chip accent mono">🎮 Jeux / Natif</span>
+    <span id="battery-badge" class="chip mono">🔋 --%</span>
+  </div>
+</header>
+
+<main class="viewport">
+
+  <!-- =========================================================
+       VUE 1 : DIAGNOSTIC, RADARS STICKS, TOUCHPAD & 20 BOUTONS
+       ========================================================= -->
+  <section id="view-diag" class="view-section active">
+    <div class="diag-grid">
+
+      <!-- Col 1 : Sticks + Visualiseur Temps Réel du Pavé Tactile Multipoint -->
+      <div class="glass-card">
+        <div class="card-top">
+          <div>
+            <div class="card-title">Radars Joysticks & Pavé Tactile Multipoint</div>
+            <div class="card-subtitle">Sticks 60 FPS + Surface Touchpad PS5 (1920×1080, 2 doigts & clic)</div>
+          </div>
+          <span id="drift-global-badge" class="chip ok">Sticks Nominaux</span>
+        </div>
+
+        <div class="sticks-stage">
+          <div class="radar-module">
+            <span class="radar-label">Stick Gauche (LS)</span>
+            <canvas id="canvas-ls" class="radar" width="152" height="152"></canvas>
+            <div class="telemetry-pills mono">
+              <div class="tele-item"><span>X</span><b id="ls-x">0.000</b></div>
+              <div class="tele-item"><span>Y</span><b id="ls-y">0.000</b></div>
+              <div class="tele-item"><span>Filt</span><b id="ls-fx">0.00</b></div>
+              <div class="tele-item"><span>Drift</span><b id="ls-drift">0.000</b></div>
+            </div>
+          </div>
+
+          <div class="radar-module">
+            <span class="radar-label">Stick Droit (RS)</span>
+            <canvas id="canvas-rs" class="radar" width="152" height="152"></canvas>
+            <div class="telemetry-pills mono">
+              <div class="tele-item"><span>X</span><b id="rs-x">0.000</b></div>
+              <div class="tele-item"><span>Y</span><b id="rs-y">0.000</b></div>
+              <div class="tele-item"><span>Filt</span><b id="rs-fx">0.00</b></div>
+              <div class="tele-item"><span>Drift</span><b id="rs-drift">0.000</b></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NOUVEAU : Visualiseur Graphique du Pavé Tactile PS5 (Doigt 1, Doigt 2, Zone Gauche/Droite) -->
+        <div class="touchpad-stage">
+          <div class="row-between">
+            <span class="radar-label">👆 Surface Pavé Tactile PS5 (Gauche B17 | Droite B18)</span>
+            <span id="touchpad-badge" class="chip mono">Touchpad : Repos</span>
+          </div>
+          <canvas id="canvas-touchpad" class="touchpad-canvas" width="440" height="92"></canvas>
+        </div>
+
+        <div class="row-between" style="padding-top:4px; border-top:1px solid var(--border-subtle);">
+          <span style="font-size:12px; color:var(--text-secondary); white-space:nowrap;">Deadzone : <b id="dz-val" class="mono">0.08</b></span>
+          <input type="range" id="dz-slider" tabindex="-1" min="0.00" max="0.35" step="0.01" value="0.08" style="flex:1;" oninput="updateDeadzone(this.value, true)">
+          <button class="btn" tabindex="-1" onclick="resetDriftPeaks()">Reset Pics</button>
+        </div>
+      </div>
+
+      <!-- Col 2 : Gâchettes L2 / R2 -->
+      <div class="glass-card">
+        <div class="card-top">
+          <div>
+            <div class="card-title">Gâchettes L2 / R2</div>
+            <div class="card-subtitle">Course & Linéarité</div>
+          </div>
+          <button class="btn" tabindex="-1" onclick="resetTriggerStats()">Reset</button>
+        </div>
+
+        <div class="triggers-stage">
+          <div class="trigger-unit">
+            <span class="radar-label">L2 / LT</span>
+            <div class="trigger-pillar"><div id="bar-l2" class="trigger-liquid"></div></div>
+            <div class="telemetry-pills mono" style="width:100%; grid-template-columns:1fr;">
+              <div class="tele-item"><span>Pression</span><b id="l2-pct">0%</b></div>
+              <div class="tele-item"><span>Brut</span><b id="l2-raw">0.000</b></div>
+              <div class="tele-item"><span>Max</span><b id="l2-max">0.000</b></div>
+              <div class="tele-item"><span>Repos</span><b id="l2-idle" style="color:var(--success)">OK</b></div>
+            </div>
+          </div>
+
+          <div class="trigger-unit">
+            <span class="radar-label">R2 / RT</span>
+            <div class="trigger-pillar"><div id="bar-r2" class="trigger-liquid"></div></div>
+            <div class="telemetry-pills mono" style="width:100%; grid-template-columns:1fr;">
+              <div class="tele-item"><span>Pression</span><b id="r2-pct">0%</b></div>
+              <div class="tele-item"><span>Brut</span><b id="r2-raw">0.000</b></div>
+              <div class="tele-item"><span>Max</span><b id="r2-max">0.000</b></div>
+              <div class="tele-item"><span>Repos</span><b id="r2-idle" style="color:var(--success)">OK</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Col 3 : Matrice complète des 20 Touches (incluant Clic Pavé Gauche/Droit, PS et Mute Mic) -->
+      <div class="glass-card">
+        <div class="card-top">
+          <div>
+            <div class="card-title">Matrice des 20 Touches (Inclus Pavé G/D, PS & Mute)</div>
+            <div class="card-subtitle">Appuyez sur le pavé à gauche (B17) ou à droite (B18) pour tester</div>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <span id="lock-counter" class="chip accent mono">0 / 20</span>
+            <button class="btn" tabindex="-1" onclick="resetLocks()">Reset</button>
+          </div>
+        </div>
+
+        <div id="btn-grid" class="pad-matrix mono"></div>
+
+        <div class="compact-debounce-panel">
+          <div class="row-between">
+            <label class="switch-wrap" title="Bascule automatiquement sur la manette dès qu'elle est manipulée">
+              <input type="checkbox" id="autofocus-gp-toggle" tabindex="-1" checked>
+              <span class="switch-track"></span>
+              <span style="font-size:11px;">Auto-Focus sur la manette active</span>
+            </label>
+          </div>
+          <div class="debounce-slider-row">
+            <span>Seuil Rebond :</span>
+            <input type="range" id="debounce-slider" tabindex="-1" min="15" max="120" step="5" value="45" oninput="document.getElementById('debounce-val').innerText = this.value + ' ms'">
+            <b id="debounce-val" class="mono">45 ms</b>
+          </div>
+        </div>
+
+        <div id="double-input-log" class="console-log mono">
+          <div class="log-line ok">✓ 20 touches actives : B16 (PS), B17 (Pavé G), B18 (Pavé D), B19 (Mute Mic) + Scroll 2 doigts prêts.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================
+       VUE 2 : STUDIO DE PROFILS, STICKS, PAVÉ TACTILE & 20 BOUTONS
+       ========================================================= -->
+  <section id="view-studio" class="view-section">
+    <div class="studio-layout">
+
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div class="glass-card">
+          <div class="card-top">
+            <div class="card-title">Bibliothèque de Profils</div>
+            <button class="btn primary" tabindex="-1" onclick="createNewProfile()">+ Nouveau</button>
+          </div>
+
+          <label class="switch-wrap" title="Change automatiquement de profil selon l'application au premier plan">
+            <input type="checkbox" id="autoswitch-toggle" tabindex="-1" onchange="toggleAutoSwitch(this.checked)">
+            <span class="switch-track"></span>
+            <span>Auto-Switch par Exécutable (.exe)</span>
+          </label>
+
+          <div id="profile-list" class="profile-list"></div>
+        </div>
+
+        <div class="glass-card">
+          <div class="card-title">Paramètres du Profil Sélectionné</div>
+
+          <div style="display:flex; flex-direction:column; gap:5px;">
+            <span style="font-size:11px; color:var(--text-muted); font-weight:600;">NOM DU PROFIL</span>
+            <input type="text" id="prof-name" placeholder="Ex: Bureau (Souris)">
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:5px;">
+            <span style="font-size:11px; color:var(--text-muted); font-weight:600;">EXÉCUTABLE(S) ASSOCIÉ(S)</span>
+            <input type="text" id="prof-exe" placeholder="Ex: vlc.exe">
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <span style="font-size:11px; color:var(--text-muted); font-weight:600;">PRESETS INSTANTANÉS (STICKS + TOUCHES)</span>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <button class="btn" tabindex="-1" onclick="applyPreset('media')">🎬 Multimédia</button>
+              <button class="btn" tabindex="-1" onclick="applyPreset('desktop')">🖱️ Bureau + Trackpad</button>
+              <button class="btn" tabindex="-1" onclick="applyPreset('game')">🎯 Jeux (Détente Arme)</button>
+              <button class="btn" tabindex="-1" onclick="applyPreset('clear')">🟢 Tout par Défaut</button>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:6px; padding-top:4px; flex-wrap:wrap;">
+            <button class="btn primary" tabindex="-1" style="flex:1;" onclick="saveCurrentProfile(false)">💾 Enregistrer</button>
+            <button class="btn" tabindex="-1" onclick="exportProfiles()" title="Exporter en JSON">⬇️ Export</button>
+            <button class="btn" tabindex="-1" onclick="document.getElementById('import-file-input').click()" title="Importer un fichier JSON">📂 Import</button>
+            <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importProfilesFile(event)">
+            <button class="btn ghost-danger" tabindex="-1" onclick="deleteCurrentProfile()" title="Supprimer">🗑️</button>
+          </div>
+          <span id="save-toast" style="display:none; font-size:12px; color:var(--success); text-align:center; font-weight:600;">✓ Profil, Sticks & 20 Touches synchronisés</span>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-top">
+          <div>
+            <div class="card-title">🕹️ Paramétrage des Sticks Analogiques, Pavé Tactile Multipoint & 20 Boutons</div>
+            <div class="card-subtitle">1 doigt = Souris + Tap Clic Gauche | 2 doigts = Scroll Molette + Tap Clic Droit | Clics Pavé B17/B18</div>
+          </div>
+          <span id="mapped-count-badge" class="chip accent mono">0 raccourci actif</span>
+        </div>
+
+        <div class="analog-config-bar">
+          <div class="analog-box">
+            <div class="analog-box-title"><span>Stick Analogique Gauche (LS)</span></div>
+            <select id="ls-mode-select" tabindex="-1" onchange="saveCurrentProfile(true); this.blur();">
+              <option value="native">🎮 Stick Jeu Natif (Aucune action OS)</option>
+              <option value="mouse">🖱️ Déplacer Curseur Souris</option>
+              <option value="scroll">↕️ Molette de Défilement (Scroll)</option>
+              <option value="wasd">⌨️ Touches Clavier ZQSD (Mouvement)</option>
+              <option value="arrows">⬆️ Flèches Directionnelles</option>
+            </select>
+          </div>
+
+          <div class="analog-box">
+            <div class="analog-box-title"><span>Stick Analogique Droit (RS)</span></div>
+            <select id="rs-mode-select" tabindex="-1" onchange="saveCurrentProfile(true); this.blur();">
+              <option value="native">🎮 Stick Jeu Natif (Aucune action OS)</option>
+              <option value="scroll">↕️ Molette de Défilement (Scroll)</option>
+              <option value="mouse">🖱️ Déplacer Curseur Souris</option>
+              <option value="arrows">⬆️ Flèches Directionnelles</option>
+            </select>
+          </div>
+
+          <div class="analog-box">
+            <div class="analog-box-title">
+              <span>Vitesse Souris Stick</span>
+              <b id="sens-val" class="mono">14</b>
+            </div>
+            <input type="range" id="sens-slider" tabindex="-1" min="4" max="32" step="1" value="14" style="margin-top:6px;" oninput="updateMouseSens(this.value, true)">
+            <span style="font-size:10px; color:var(--text-muted);">Courbe progressive au stick</span>
+          </div>
+
+          <div class="analog-box">
+            <div class="analog-box-title">
+              <span>👆 Trackpad PS5 (1 & 2 Doigts)</span>
+              <b id="tp-sens-val" class="mono">1.2x</b>
+            </div>
+            <label class="switch-wrap" style="margin-top:2px;">
+              <input type="checkbox" id="tp-enable-toggle" tabindex="-1" checked onchange="saveCurrentProfile(true)">
+              <span class="switch-track"></span>
+              <span style="font-size:11px;">1 doigt=Souris / 2 doigts=Scroll</span>
+            </label>
+            <input type="range" id="tp-sens-slider" tabindex="-1" min="0.4" max="3.0" step="0.1" value="1.2" style="margin-top:4px;" oninput="updateTouchpadSens(this.value, true)">
+          </div>
+        </div>
+
+        <div id="mapping-grid" class="studio-Mapping-grid"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================
+       VUE 3 : PÉRIPHÉRIQUES, GÂCHETTES ADAPTATIVES PS5, HUD EN JEU & AUTOMATISATION
+       ========================================================= -->
+  <section id="view-hardware" class="view-section">
+    <div class="hw-grid">
+
+      <div class="glass-card">
+        <div class="card-top">
+          <div>
+            <div class="card-title">🛠️ Centre de Périphériques, Pilotes & Reset (Anti-Doublon USB/BT)</div>
+            <div class="card-subtitle">Gérez les ports actifs, réveillez la PS5 en Bluetooth et purgez les doublons</div>
+          </div>
+          <button class="btn" tabindex="-1" onclick="requestHardwareRefresh()">🔄 Actualiser</button>
+        </div>
+
+        <div class="driver-tools-grid">
+          <button class="btn primary" tabindex="-1" onclick="triggerHidReset()">⚡ Reset HID & Réveiller PS5 (BT)</button>
+          <button class="btn warn-btn" tabindex="-1" onclick="triggerKillConflicts(false)">🧹 Purger DS4Windows / InputMapper</button>
+          <button class="btn ghost-danger" tabindex="-1" onclick="triggerKillConflicts(true)">🛑 Fermer Steam + Tous Émulateurs</button>
+          <button class="btn" tabindex="-1" onclick="purgeGhostPortsUI()">👻 Masquer les Ports Fantômes Muets</button>
+          <button class="btn" tabindex="-1" onclick="openWinTool('joy.cpl')">🎛️ Contrôleurs Windows (joy.cpl)</button>
+          <button class="btn" tabindex="-1" onclick="openWinTool('devmgmt.msc')">⚙️ Gestionnaire de Pilotes Windows</button>
+          <button class="btn" tabindex="-1" onclick="openWinTool('ms-settings:bluetooth')">📶 Paramètres Bluetooth Windows</button>
+          <button class="btn" tabindex="-1" onclick="connectWebHID()">🔌 Forcer Liaison Directe WebHID</button>
+        </div>
+
+        <div style="border-top:1px solid var(--border-subtle); padding-top:12px;">
+          <div class="row-between" style="margin-bottom:8px; flex-wrap:wrap;">
+            <div>
+              <strong style="font-size:13px; color:#60a5fa;">🎯 Gâchettes Adaptatives PS5 DualSense (L2 & R2)</strong>
+              <div style="font-size:11px; color:var(--text-muted);">Envoi direct par USB (0x02) et Bluetooth signé CRC-32 (0x31)</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn ok-btn" tabindex="-1" onclick="resetTriggersToDefaultUI()" title="Envoie le code 0x05 pour relâcher immédiatement les moteurs L2 et R2">
+                🟢 Relâcher L2/R2 (Défaut)
+              </button>
+              <button class="btn primary" tabindex="-1" onclick="applyAdaptiveTriggersNow()">
+                ⚡ Tester sur la PS5
+              </button>
+            </div>
+          </div>
+
+          <div class="analog-config-bar" style="grid-template-columns: 1fr 1fr;">
+            <div class="analog-box">
+              <div class="analog-box-title">
+                <span>Gâchette Gauche (L2)</span>
+                <b id="l2-force-val" class="mono">180</b>
+              </div>
+              <select id="l2-mode-select" tabindex="-1" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true); this.blur();">
+                <option value="off">🟢 Souple / Par Défaut (Aucune résistance)</option>
+                <option value="continuous">🧱 Résistance Continue (Pédale lourde)</option>
+                <option value="section">🔫 Cranté / Point Dur (Détente Arme)</option>
+                <option value="vibration">⚡ Pulsation Auto (Mitraillette / ABS)</option>
+              </select>
+              <input type="range" id="l2-force-slider" tabindex="-1" min="40" max="255" step="5" value="180" style="margin-top:4px;" oninput="document.getElementById('l2-force-val').innerText = this.value" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true);">
+            </div>
+
+            <div class="analog-box">
+              <div class="analog-box-title">
+                <span>Gâchette Droite (R2)</span>
+                <b id="r2-force-val" class="mono">180</b>
+              </div>
+              <select id="r2-mode-select" tabindex="-1" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true); this.blur();">
+                <option value="off">🟢 Souple / Par Défaut (Aucune résistance)</option>
+                <option value="continuous">🧱 Résistance Continue (Pédale lourde)</option>
+                <option value="section">🔫 Cranté / Point Dur (Détente Arme)</option>
+                <option value="vibration">⚡ Pulsation Auto (Mitraillette / ABS)</option>
+              </select>
+              <input type="range" id="r2-force-slider" tabindex="-1" min="40" max="255" step="5" value="180" style="margin-top:4px;" oninput="document.getElementById('r2-force-val').innerText = this.value" onchange="applyAdaptiveTriggersNow(); saveCurrentProfile(true);">
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border-subtle); padding-top:10px;">
+          <div class="row-between" style="margin-bottom:6px;">
+            <strong style="font-size:12px;">Périphériques Physiques Sony (Bus USB / Bluetooth HID) :</strong>
+            <span id="hid-bridge-status" class="chip ok mono">Pont C# HID : Prêt</span>
+          </div>
+          <div id="sony-hw-list" class="slots-list">
+            <div class="slot-row" style="color:var(--text-muted);">En attente du scan matériel C#...</div>
+          </div>
+          <div id="slots-list" class="slots-list" style="margin-top:6px;"></div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:14px;">
+
+        <div class="glass-card">
+          <div class="card-top">
+            <div>
+              <div class="card-title">🚀 Automatisation Windows & Overlay HUD en Jeu (OSD)</div>
+              <div class="card-subtitle">Options système persistantes et affichage tête haute par-dessus vos jeux</div>
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px; padding:4px 0;">
+            <label class="switch-wrap">
+              <input type="checkbox" id="hud-overlay-toggle" tabindex="-1" onchange="toggleHudOverlayUI(this.checked)">
+              <span class="switch-track"></span>
+              <span>📺 <b>Afficher l'Overlay HUD en jeu</b> (Bandeau transparent Batterie + Profil en haut à droite)</span>
+            </label>
+
+            <label class="switch-wrap">
+              <input type="checkbox" id="win-startup-toggle" tabindex="-1" onchange="toggleWindowsStartupUI(this.checked)">
+              <span class="switch-track"></span>
+              <span>🚀 <b>Démarrer automatiquement avec Windows</b> (Lancement discret en mode Tray <code>--tray</code>)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <div class="card-top">
+            <div>
+              <div class="card-title">Banc d'Essai Haptique (Rumble Motors)</div>
+              <div class="card-subtitle">Teste les moteurs sur le port sélectionné (Xbox & PS5)</div>
+            </div>
+            <span id="rumble-status" class="chip accent">Prêt</span>
+          </div>
+
+          <div class="row-between">
+            <span style="width:140px; font-size:12px; color:var(--text-secondary);">Moteur Gauche (Lourd)</span>
+            <input type="range" id="rumble-l" tabindex="-1" min="0" max="1" step="0.05" value="0.75" style="flex:1;">
+            <b id="rumble-l-val" class="mono" style="width:45px; text-align:right;">75%</b>
+          </div>
+
+          <div class="row-between">
+            <span style="width:140px; font-size:12px; color:var(--text-secondary);">Moteur Droit (Fin)</span>
+            <input type="range" id="rumble-r" tabindex="-1" min="0" max="1" step="0.05" value="0.75" style="flex:1;">
+            <b id="rumble-r-val" class="mono" style="width:45px; text-align:right;">75%</b>
+          </div>
+
+          <div style="display:flex; gap:10px;">
+            <button class="btn primary" tabindex="-1" style="flex:1;" onclick="testRumble(600)">🌊 Vibrer (600ms)</button>
+            <button class="btn" tabindex="-1" style="flex:1;" onclick="testRumblePulse()">⚡ Staccato</button>
+            <button class="btn ghost-danger" tabindex="-1" onclick="stopRumble()">Stop</button>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <div class="card-top">
+            <div>
+              <div class="card-title">LED / Lightbar Sony (PS4 & PS5 DualSense)</div>
+              <div class="card-subtitle">Personnalisation lumineuse par profil</div>
+            </div>
+          </div>
+
+          <div id="lightbar-preview" class="lightbar-preview">Aperçu Halo Lightbar</div>
+          <div class="swatch-bar" id="swatch-container"></div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<script>
+window.addEventListener('keydown', (e) => {
+  const tag = document.activeElement ? document.activeElement.tagName : '';
+  if (tag !== 'INPUT') {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter', 'Tab', 'GamepadA', 'GamepadB', 'GamepadLeftShoulder', 'GamepadRightShoulder'].includes(e.key)) {
+      e.preventDefault();
+      if (document.activeElement && tag === 'SELECT') {
+        document.activeElement.blur();
+      }
+    }
+  }
+}, { capture: true });
+
+let activeGpIndex = 99;
+let hiddenGhostIndices = new Set();
+let mappingMasterEnabled = true;
+let deadzone = 0.08;
+let mouseSensitivity = 14;
+let touchpadSensitivity = 1.2;
+let lsMaxDrift = 0, rsMaxDrift = 0;
+let l2Max = 0, r2Max = 0;
+let lockedButtons = new Set();
+let prevButtonStates = new Array(20).fill(false);
+let lastPressTimestamps = new Array(20).fill(0);
+let doubleInputFaults = new Array(20).fill(false);
+let hidDevice = null;
+let currentLightbar = { r: 0, g: 102, b: 255 };
+
+let lastCSharpSonyPacketTime = 0;
+
+const lsTrail = [];
+const rsTrail = [];
+
+let profiles = [];
+let activeProfileIdx = 0;
+let lastKnownSlotsSignature = "";
+
+// 20 BOUTONS COMPLETS (Incluant PS, Clic Pavé Gauche, Clic Pavé Droit et Mute Mic)
+const BUTTON_SHORT = [
+  "A / Croix", "B / Rond", "X / Carré", "Y / Triangle",
+  "LB / L1", "RB / R1", "LT / L2", "RT / R2",
+  "Share/Create", "Options", "L3 (Stick G)", "R3 (Stick D)",
+  "D-Haut", "D-Bas", "D-Gauche", "D-Droit",
+  "Bouton PS", "Pavé Gauche", "Pavé Droit", "Mute Mic"
+];
+
+const MAPPING_ACTIONS = [
+  "Défaut (Native)",
+  "Clic Gauche Souris",
+  "Clic Droit Souris",
+  "Clic Molette (Milieu)",
+  "Play / Pause",
+  "Volume +",
+  "Volume -",
+  "Mute",
+  "Piste Suivante",
+  "Piste Précédente",
+  "Plein Écran (F11)",
+  "Capture d'écran (Impr. Écran)",
+  "Afficher le Bureau (Win + D)",
+  "Touche Entrée",
+  "Touche Espace (Saut)",
+  "Echap",
+  "Alt + Tab"
+];
+
+const DS4_COLORS = [
+  { name: "Bleu Console", r: 0, g: 102, b: 255, hex: "#0066ff" },
+  { name: "Rouge Cyber", r: 239, g: 68, b: 68, hex: "#ef4444" },
+  { name: "Émeraude", r: 16, g: 185, b: 129, hex: "#10b981" },
+  { name: "Magenta", r: 236, g: 72, b: 153, hex: "#ec4899" },
+  { name: "Ambre", r: 245, g: 158, b: 11, hex: "#f59e0b" },
+  { name: "Cyan Glace", r: 6, g: 182, b: 212, hex: "#06b6d4" },
+  { name: "Blanc Pur", r: 255, g: 255, b: 255, hex: "#ffffff" }
+];
+
+// Échappe toute donnée externe (profils importés, noms de périphériques) avant insertion via innerHTML
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function toByte(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(255, Math.max(0, Math.round(n))) : 0;
+}
+
+function switchView(viewId, btnEl) {
+  document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + viewId).classList.add('active');
+  btnEl.classList.add('active');
+  btnEl.blur();
+}
+
+function applyAdaptiveTriggersNow() {
+  const l2Mode = document.getElementById('l2-mode-select')?.value || 'off';
+  const l2Force = parseInt(document.getElementById('l2-force-slider')?.value || '180', 10);
+  const r2Mode = document.getElementById('r2-mode-select')?.value || 'off';
+  const r2Force = parseInt(document.getElementById('r2-force-slider')?.value || '180', 10);
+
+  sendToHost({
+    action: "applyDualSenseTriggers",
+    l2Mode,
+    l2Force,
+    r2Mode,
+    r2Force,
+    color: currentLightbar
+  });
+  logEvent(`Gâchettes PS5 : L2=${l2Mode} (${l2Force}) | R2=${r2Mode} (${r2Force})`, "ok");
+}
+
+function resetTriggersToDefaultUI() {
+  document.getElementById('l2-mode-select').value = 'off';
+  document.getElementById('r2-mode-select').value = 'off';
+  sendToHost({ action: "resetTriggersDefault" });
+  saveCurrentProfile(true);
+  logEvent("Gâchettes L2 et R2 relâchées et remises par défaut (Souples).", "ok");
+}
+
+function toggleMappingMaster() {
+  mappingMasterEnabled = !mappingMasterEnabled;
+  updateMappingMasterUI();
+  sendToHost({ action: "setMappingEnabled", enabled: mappingMasterEnabled });
+}
+
+function updateMappingMasterUI() {
+  const btn = document.getElementById('mapping-master-btn');
+  if (mappingMasterEnabled) {
+    btn.className = 'btn primary';
+    btn.innerText = '⌨️ Raccourcis : Actifs';
+  } else {
+    btn.className = 'btn warn-btn';
+    btn.innerText = '🔇 Raccourcis : En Pause';
+  }
+}
+
+function toggleHudOverlayUI(enabled) {
+  sendToHost({ action: "setHudOverlay", enabled });
+}
+
+function toggleWindowsStartupUI(enabled) {
+  sendToHost({ action: "setWindowsStartup", enabled });
+}
+
+function classifyController(idStr) {
+  const s = (idStr || "").toLowerCase();
+  if (s.includes("0ce6") || s.includes("dualsense") || s.includes("0df2")) {
+    return { type: "PS5", label: "PS5 DualSense", vid: "054C", pid: "0CE6" };
+  }
+  if (s.includes("05c4") || s.includes("09cc") || s.includes("dualshock") || s.includes("wireless controller")) {
+    return { type: "PS4", label: "PS4 DualShock 4", vid: "054C", pid: "09CC" };
+  }
+  if (s.includes("xbox") || s.includes("xinput") || s.includes("045e")) {
+    return { type: "XBOX", label: "Manette Xbox (XInput)", vid: "045E", pid: "XBOX" };
+  }
+  const vidMatch = idStr.match(/Vendor:\s*([0-9a-fA-F]{4})/i) || idStr.match(/VID_([0-9a-fA-F]{4})/i);
+  const pidMatch = idStr.match(/Product:\s*([0-9a-fA-F]{4})/i) || idStr.match(/PID_([0-9a-fA-F]{4})/i);
+  return {
+    type: "GENERIC",
+    label: idStr.substring(0, 28),
+    vid: vidMatch ? vidMatch[1].toUpperCase() : "STD",
+    pid: pidMatch ? pidMatch[1].toUpperCase() : "HID"
+  };
+}
+
+function triggerHidReset() {
+  hiddenGhostIndices.clear();
+  sendToHost({ action: "resetHidDevices" });
+  logEvent("Reset HID envoyé : priorité USB si câblé, sinon réveil Bluetooth PS5...", "ok");
+  setTimeout(refreshGamepadListUI, 600);
+}
+
+function triggerKillConflicts(includeSteam) {
+  sendToHost({ action: "killConflicts", includeSteam });
+  logEvent(includeSteam ? "Arrêt de Steam et des émulateurs tiers..." : "Arrêt de DS4Windows / InputMapper...", "warn");
+  setTimeout(refreshGamepadListUI, 1000);
+}
+
+function openWinTool(toolName) {
+  sendToHost({ action: "openWinTool", tool: toolName });
+}
+
+function requestHardwareRefresh() {
+  hiddenGhostIndices.clear();
+  refreshGamepadListUI();
+  sendToHost({ action: "refreshHardwareInventory" });
+}
+
+function purgeGhostPortsUI() {
+  const gps = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+  let masked = 0;
+  gps.forEach(gp => {
+    const anyPressed = gp.buttons.some(b => b && b.pressed);
+    const anyMoved = gp.axes.some(a => Math.abs(a) > 0.08 && Math.abs(a) !== 1.0);
+    if (!anyPressed && !anyMoved) {
+      hiddenGhostIndices.add(gp.index);
+      masked++;
+    }
+  });
+  activeGpIndex = 99;
+  refreshGamepadListUI();
+  logEvent(`${masked} port(s) fantôme(s) muet(s) masqué(s). Basculement sur le Pont Direct C# HID.`, "ok");
+}
+
+function onSelectControllerSlot(val, fromBackend = false) {
+  const idx = parseInt(val, 10);
+  if (isNaN(idx)) return;
+
+  activeGpIndex = idx;
+  resetDriftPeaks();
+  resetTriggerStats();
+  resetLocks();
+  lsTrail.length = 0;
+  rsTrail.length = 0;
+
+  if (idx === 99) {
+    logEvent("Pont Direct C# HID Sony sélectionné (Lecture directe Bluetooth / USB).", "ok");
+    if (!fromBackend) {
+      sendToHost({ action: "selectController", index: 99, controllerType: "PS5", name: "PS5 Direct HID (C#)" });
+    }
+    refreshGamepadListUI();
+    return;
+  }
+
+  const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+  const gp = gps[activeGpIndex];
+  if (gp) {
+    const info = classifyController(gp.id);
+    logEvent(`Contrôle basculé sur Port #${idx} : ${info.label}`, "ok");
+    if (!fromBackend) {
+      sendToHost({
+        action: "selectController",
+        index: idx,
+        controllerType: info.type,
+        name: info.label
+      });
+    }
+  }
+  refreshGamepadListUI();
+}
+
+function refreshGamepadListUI() {
+  const rawGps = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+  const gps = rawGps.filter(g => !hiddenGhostIndices.has(g.index));
+
+  const sel = document.getElementById('gp-selector');
+  const slotsBox = document.getElementById('slots-list');
+
+  sel.innerHTML = '';
+  slotsBox.innerHTML = '';
+
+  const bridgeOpt = document.createElement('option');
+  bridgeOpt.value = 99;
+  bridgeOpt.selected = (activeGpIndex === 99);
+  bridgeOpt.innerText = `[Pont Direct C#] Sony PS5 / PS4 (Bluetooth & USB)`;
+  sel.appendChild(bridgeOpt);
+
+  gps.forEach(gp => {
+    const info = classifyController(gp.id);
+    const opt = document.createElement('option');
+    opt.value = gp.index;
+    opt.selected = (gp.index === activeGpIndex);
+    opt.innerText = `[Port Navigateur #${gp.index}] ${info.label}`;
+    sel.appendChild(opt);
+
+    const row = document.createElement('div');
+    row.className = 'slot-row' + (gp.index === activeGpIndex ? ' active-slot' : '');
+    row.innerHTML = `
+      <div>
+        <strong>Port Navigateur #${gp.index} — ${escapeHtml(info.label)}</strong>
+        <div class="mono" style="font-size:11px; color:var(--text-muted);">${escapeHtml(gp.id)}</div>
+      </div>
+      <button class="btn ${gp.index === activeGpIndex ? 'primary' : ''}" tabindex="-1" onclick="onSelectControllerSlot(${gp.index})">
+        ${gp.index === activeGpIndex ? '✓ Actif' : 'Choisir'}
+      </button>
+    `;
+    slotsBox.appendChild(row);
+  });
+
+  if (gps.length > 0 || (performance.now() - lastCSharpSonyPacketTime < 3000)) {
+    document.getElementById('gp-orb').classList.add('connected');
+  }
+
+  const controllerList = [{ index: 99, type: "PS5", label: "PS5/PS4 Direct HID (C#)" }];
+  gps.forEach(g => {
+    const inf = classifyController(g.id);
+    controllerList.push({ index: g.index, type: inf.type, label: inf.label });
+  });
+  sendToHost({ action: "updateControllerList", controllers: controllerList, activeIndex: activeGpIndex });
+}
+
+function getDefaultProfiles() {
+  return [
+    {
+      name: "Jeux / Natif (Aucun raccourci)",
+      exe: "cs2.exe, cod.exe, apex.exe",
+      deadzone: 0.04,
+      leftStickMode: "native",
+      rightStickMode: "native",
+      mouseSensitivity: 14,
+      touchpadMouseEnabled: false,
+      touchpadSensitivity: 1.2,
+      l2TriggerMode: "off",
+      l2TriggerForce: 180,
+      r2TriggerMode: "off",
+      r2TriggerForce: 180,
+      color: { r: 239, g: 68, b: 68 },
+      buttonMapping: {}
+    },
+    {
+      name: "Multimédia (VLC + Trackpad PS5)",
+      exe: "vlc.exe",
+      deadzone: 0.08,
+      leftStickMode: "mouse",
+      rightStickMode: "scroll",
+      mouseSensitivity: 12,
+      touchpadMouseEnabled: true,
+      touchpadSensitivity: 1.3,
+      l2TriggerMode: "off",
+      l2TriggerForce: 150,
+      r2TriggerMode: "off",
+      r2TriggerForce: 150,
+      color: { r: 6, g: 182, b: 212 },
+      buttonMapping: {
+        "0": "Play / Pause",
+        "1": "Plein Écran (F11)",
+        "2": "Mute",
+        "4": "Piste Précédente",
+        "5": "Piste Suivante",
+        "12": "Volume +",
+        "13": "Volume -",
+        "17": "Play / Pause",
+        "18": "Plein Écran (F11)",
+        "19": "Mute"
+      }
+    },
+    {
+      name: "Bureau (Trackpad 2 Doigts & Souris)",
+      exe: "calc.exe",
+      deadzone: 0.09,
+      leftStickMode: "mouse",
+      rightStickMode: "scroll",
+      mouseSensitivity: 15,
+      touchpadMouseEnabled: true,
+      touchpadSensitivity: 1.4,
+      l2TriggerMode: "off",
+      l2TriggerForce: 150,
+      r2TriggerMode: "off",
+      r2TriggerForce: 150,
+      color: { r: 0, g: 102, b: 255 },
+      buttonMapping: {
+        "0": "Clic Gauche Souris",
+        "1": "Clic Droit Souris",
+        "2": "Touche Entrée",
+        "3": "Echap",
+        "4": "Alt + Tab",
+        "16": "Afficher le Bureau (Win + D)",
+        "17": "Clic Gauche Souris",
+        "18": "Clic Droit Souris",
+        "19": "Mute"
+      }
+    }
+  ];
+}
+
+function initUI() {
+  const grid = document.getElementById('btn-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 20; i++) {
+    const key = document.createElement('div');
+    key.className = 'pad-key';
+    key.id = `btn-cell-${i}`;
+    key.innerHTML = `<span class="key-id">B${i}</span><span class="key-name">${BUTTON_SHORT[i]}</span>`;
+    grid.appendChild(key);
+  }
+
+  const swatchContainer = document.getElementById('swatch-container');
+  DS4_COLORS.forEach((col, idx) => {
+    const orb = document.createElement('div');
+    orb.className = 'color-orb' + (idx === 0 ? ' selected' : '');
+    orb.style.backgroundColor = col.hex;
+    orb.style.color = col.hex;
+    orb.title = col.name;
+    orb.onclick = () => {
+      selectLightbarSwatch(col.r, col.g, col.b);
+      saveCurrentProfile(true);
+    };
+    swatchContainer.appendChild(orb);
+  });
+
+  document.getElementById('rumble-l').oninput = function() {
+    document.getElementById('rumble-l-val').innerText = Math.round(this.value * 100) + '%';
+  };
+  document.getElementById('rumble-r').oninput = function() {
+    document.getElementById('rumble-r-val').innerText = Math.round(this.value * 100) + '%';
+  };
+
+  initMappingGrid();
+  initProfiles();
+  drawRadarCanvas('canvas-ls', 0, 0, deadzone, false, lsTrail);
+  drawRadarCanvas('canvas-rs', 0, 0, deadzone, false, rsTrail);
+  drawTouchpadSurface(false, 0, 0, false, 0, 0, false);
+
+  sendToHost({ action: "requestInitState" });
+}
+
+function initMappingGrid() {
+  const container = document.getElementById('mapping-grid');
+  container.innerHTML = '';
+
+  for (let i = 0; i < 20; i++) {
+    const tile = document.createElement('div');
+    tile.className = 'bind-tile';
+    tile.id = `map-card-${i}`;
+
+    const label = document.createElement('div');
+    label.className = 'bind-label mono';
+    label.innerHTML = `<span>${BUTTON_SHORT[i]}</span><span>#${i}</span>`;
+
+    const select = document.createElement('select');
+    select.id = `map-btn-${i}`;
+    select.tabIndex = -1;
+    MAPPING_ACTIONS.forEach(act => {
+      const opt = document.createElement('option');
+      opt.value = act;
+      opt.innerText = act;
+      select.appendChild(opt);
+    });
+
+    select.onchange = () => {
+      select.blur();
+      refreshMappingHighlights();
+      saveCurrentProfile(true);
+    };
+
+    tile.appendChild(label);
+    tile.appendChild(select);
+    container.appendChild(tile);
+  }
+}
+
+function refreshMappingHighlights() {
+  let count = 0;
+  for (let i = 0; i < 20; i++) {
+    const sel = document.getElementById(`map-btn-${i}`);
+    const tile = document.getElementById(`map-card-${i}`);
+    if (sel && tile) {
+      if (sel.value !== "Défaut (Native)") {
+        tile.classList.add('active-bind');
+        count++;
+      } else {
+        tile.classList.remove('active-bind');
+      }
+    }
+  }
+  const lsMode = document.getElementById('ls-mode-select')?.value || 'native';
+  const rsMode = document.getElementById('rs-mode-select')?.value || 'native';
+  const stickExtra = (lsMode !== 'native' ? 1 : 0) + (rsMode !== 'native' ? 1 : 0);
+
+  document.getElementById('mapped-count-badge').innerText =
+    `${count} touche(s) + ${stickExtra} stick(s) actif(s)`;
+}
+
+function initProfiles() {
+  try {
+    const saved = localStorage.getItem('gp_profiles');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        parsed.forEach(p => {
+          if (p.exe && (p.exe.includes("msedge.exe") || p.exe.includes("chrome.exe"))) {
+            p.exe = "vlc.exe";
+          }
+          if (!p.leftStickMode) p.leftStickMode = "native";
+          if (!p.rightStickMode) p.rightStickMode = "native";
+          if (!p.mouseSensitivity) p.mouseSensitivity = 14;
+          if (typeof p.touchpadMouseEnabled !== 'boolean') p.touchpadMouseEnabled = true;
+          if (!p.touchpadSensitivity) p.touchpadSensitivity = 1.2;
+          if (!p.l2TriggerMode) p.l2TriggerMode = "off";
+          if (!p.r2TriggerMode) p.r2TriggerMode = "off";
+          if (!p.l2TriggerForce) p.l2TriggerForce = 180;
+          if (!p.r2TriggerForce) p.r2TriggerForce = 180;
+        });
+        profiles = parsed;
+      }
+    }
+  } catch (e) {}
+
+  if (!profiles || profiles.length === 0) {
+    profiles = getDefaultProfiles();
+  }
+  localStorage.setItem('gp_profiles', JSON.stringify(profiles));
+  renderProfileList();
+  loadProfileByIndex(0, false);
+}
+
+function renderProfileList() {
+  const list = document.getElementById('profile-list');
+  list.innerHTML = '';
+
+  profiles.forEach((p, idx) => {
+    const item = document.createElement('div');
+    item.className = 'profile-card-item' + (idx === activeProfileIdx ? ' active' : '');
+    const rawColor = p.color || { r: 0, g: 102, b: 255 };
+    const c = { r: toByte(rawColor.r), g: toByte(rawColor.g), b: toByte(rawColor.b) };
+    const mapCount = p.buttonMapping ? Object.keys(p.buttonMapping).length : 0;
+    const hasMouse = (p.leftStickMode === 'mouse' || p.rightStickMode === 'mouse' || p.touchpadMouseEnabled);
+    const hasTrig = (p.l2TriggerMode && p.l2TriggerMode !== 'off') || (p.r2TriggerMode && p.r2TriggerMode !== 'off');
+
+    item.innerHTML = `
+      <div class="prof-item-left">
+        <span class="prof-color-orb" style="background:rgb(${c.r},${c.g},${c.b}); box-shadow:0 0 10px rgb(${c.r},${c.g},${c.b});"></span>
+        <div>
+          <div class="prof-item-title">${escapeHtml(p.name)}</div>
+          <div class="prof-item-exe mono">${escapeHtml(p.exe)} ${hasMouse ? '• 🖱️ Souris' : ''} ${hasTrig ? '• 🎯 L2/R2' : ''}</div>
+        </div>
+      </div>
+      <span class="chip mono">${mapCount} B</span>
+    `;
+    item.onclick = () => loadProfileByIndex(idx, true);
+    list.appendChild(item);
+  });
+}
+
+function loadProfileByIndex(idx, notifyBackend = true) {
+  if (idx < 0 || idx >= profiles.length) idx = 0;
+  activeProfileIdx = idx;
+  const p = profiles[idx];
+
+  document.getElementById('prof-name').value = p.name || "Profil";
+  document.getElementById('prof-exe').value = p.exe || "default";
+
+  const dz = typeof p.deadzone === 'number' ? p.deadzone : 0.08;
+  document.getElementById('dz-slider').value = dz;
+  updateDeadzone(dz, false);
+
+  const sens = typeof p.mouseSensitivity === 'number' ? p.mouseSensitivity : 14;
+  document.getElementById('sens-slider').value = sens;
+  updateMouseSens(sens, false);
+
+  document.getElementById('tp-enable-toggle').checked = (p.touchpadMouseEnabled !== false);
+  const tpSens = typeof p.touchpadSensitivity === 'number' ? p.touchpadSensitivity : 1.2;
+  document.getElementById('tp-sens-slider').value = tpSens;
+  updateTouchpadSens(tpSens, false);
+
+  document.getElementById('ls-mode-select').value = p.leftStickMode || "native";
+  document.getElementById('rs-mode-select').value = p.rightStickMode || "native";
+
+  document.getElementById('l2-mode-select').value = p.l2TriggerMode || "off";
+  document.getElementById('l2-force-slider').value = p.l2TriggerForce || 180;
+  document.getElementById('l2-force-val').innerText = p.l2TriggerForce || 180;
+
+  document.getElementById('r2-mode-select').value = p.r2TriggerMode || "off";
+  document.getElementById('r2-force-slider').value = p.r2TriggerForce || 180;
+  document.getElementById('r2-force-val').innerText = p.r2TriggerForce || 180;
+
+  if (p.color) {
+    selectLightbarSwatch(p.color.r, p.color.g, p.color.b);
+  }
+
+  for (let i = 0; i < 20; i++) {
+    const sel = document.getElementById(`map-btn-${i}`);
+    if (sel) {
+      sel.value = (p.buttonMapping && p.buttonMapping[String(i)]) ? p.buttonMapping[String(i)] : "Défaut (Native)";
+    }
+  }
+
+  refreshMappingHighlights();
+  renderProfileList();
+
+  if (notifyBackend) {
+    document.getElementById('autoswitch-toggle').checked = false;
+    document.getElementById('active-process-badge').innerText = `🎮 ${p.name}`;
+    sendToHost({ action: "selectProfile", profileName: p.name, autoSwitch: false });
+  }
+}
+
+function saveCurrentProfile(silent = false) {
+  const p = profiles[activeProfileIdx];
+  if (!p) return;
+
+  const name = document.getElementById('prof-name').value.trim() || "Profil Custom";
+  const exe = document.getElementById('prof-exe').value.trim() || "game.exe";
+  const leftStickMode = document.getElementById('ls-mode-select').value || "native";
+  const rightStickMode = document.getElementById('rs-mode-select').value || "native";
+  const touchpadMouseEnabled = document.getElementById('tp-enable-toggle').checked;
+
+  const l2TriggerMode = document.getElementById('l2-mode-select').value || "off";
+  const l2TriggerForce = parseInt(document.getElementById('l2-force-slider').value || "180", 10);
+  const r2TriggerMode = document.getElementById('r2-mode-select').value || "off";
+  const r2TriggerForce = parseInt(document.getElementById('r2-force-slider').value || "180", 10);
+
+  const buttonMapping = {};
+  for (let i = 0; i < 20; i++) {
+    const sel = document.getElementById(`map-btn-${i}`);
+    if (sel && sel.value !== "Défaut (Native)") {
+      buttonMapping[String(i)] = sel.value;
+    }
+  }
+
+  profiles[activeProfileIdx] = {
+    name,
+    exe,
+    deadzone,
+    leftStickMode,
+    rightStickMode,
+    mouseSensitivity,
+    touchpadMouseEnabled,
+    touchpadSensitivity,
+    l2TriggerMode,
+    l2TriggerForce,
+    r2TriggerMode,
+    r2TriggerForce,
+    color: { ...currentLightbar },
+    buttonMapping
+  };
+
+  localStorage.setItem('gp_profiles', JSON.stringify(profiles));
+  refreshMappingHighlights();
+  renderProfileList();
+
+  sendToHost({
+    action: "syncProfiles",
+    profiles,
+    activeProfileName: name
+  });
+
+  if (!silent) {
+    const toast = document.getElementById('save-toast');
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 2000);
+  }
+}
+
+function createNewProfile() {
+  profiles.push({
+    name: `Profil #${profiles.length + 1}`,
+    exe: "game.exe",
+    deadzone: 0.08,
+    leftStickMode: "native",
+    rightStickMode: "native",
+    mouseSensitivity: 14,
+    touchpadMouseEnabled: true,
+    touchpadSensitivity: 1.2,
+    l2TriggerMode: "off",
+    l2TriggerForce: 180,
+    r2TriggerMode: "off",
+    r2TriggerForce: 180,
+    color: { r: 16, g: 185, b: 129 },
+    buttonMapping: {}
+  });
+  loadProfileByIndex(profiles.length - 1, true);
+  saveCurrentProfile(false);
+}
+
+function deleteCurrentProfile() {
+  if (profiles.length <= 1) return;
+  profiles.splice(activeProfileIdx, 1);
+  activeProfileIdx = 0;
+  localStorage.setItem('gp_profiles', JSON.stringify(profiles));
+  loadProfileByIndex(0, true);
+  sendToHost({ action: "syncProfiles", profiles, activeProfileName: profiles[0].name });
+}
+
+function applyPreset(type) {
+  for (let i = 0; i < 20; i++) document.getElementById(`map-btn-${i}`).value = "Défaut (Native)";
+  document.getElementById('ls-mode-select').value = "native";
+  document.getElementById('rs-mode-select').value = "native";
+  document.getElementById('l2-mode-select').value = "off";
+  document.getElementById('r2-mode-select').value = "off";
+  document.getElementById('tp-enable-toggle').checked = false;
+
+  if (type === 'media') {
+    document.getElementById('ls-mode-select').value = "mouse";
+    document.getElementById('rs-mode-select').value = "scroll";
+    document.getElementById('tp-enable-toggle').checked = true;
+    document.getElementById('map-btn-0').value = "Play / Pause";
+    document.getElementById('map-btn-1').value = "Plein Écran (F11)";
+    document.getElementById('map-btn-2').value = "Mute";
+    document.getElementById('map-btn-4').value = "Piste Précédente";
+    document.getElementById('map-btn-5').value = "Piste Suivante";
+    document.getElementById('map-btn-12').value = "Volume +";
+    document.getElementById('map-btn-13').value = "Volume -";
+    document.getElementById('map-btn-17').value = "Play / Pause";
+    document.getElementById('map-btn-18').value = "Plein Écran (F11)";
+    document.getElementById('map-btn-19').value = "Mute";
+  } else if (type === 'desktop') {
+    document.getElementById('ls-mode-select').value = "mouse";
+    document.getElementById('rs-mode-select').value = "scroll";
+    document.getElementById('tp-enable-toggle').checked = true;
+    document.getElementById('map-btn-0').value = "Clic Gauche Souris";
+    document.getElementById('map-btn-1').value = "Clic Droit Souris";
+    document.getElementById('map-btn-2').value = "Touche Entrée";
+    document.getElementById('map-btn-3').value = "Echap";
+    document.getElementById('map-btn-4').value = "Alt + Tab";
+    document.getElementById('map-btn-16').value = "Afficher le Bureau (Win + D)";
+    document.getElementById('map-btn-17').value = "Clic Gauche Souris";
+    document.getElementById('map-btn-18').value = "Clic Droit Souris";
+    document.getElementById('map-btn-19').value = "Mute";
+  } else if (type === 'game') {
+    document.getElementById('l2-mode-select').value = "section";
+    document.getElementById('r2-mode-select').value = "section";
+  }
+  refreshMappingHighlights();
+  saveCurrentProfile(false);
+}
+
+function toggleAutoSwitch(enabled) {
+  sendToHost({ action: "setAutoSwitch", enabled });
+}
+
+function selectLightbarSwatch(r, g, b) {
+  currentLightbar = { r, g, b };
+  const rgbStr = `rgb(${r}, ${g}, ${b})`;
+  const glowStr = `rgba(${r}, ${g}, ${b}, 0.28)`;
+
+  document.documentElement.style.setProperty('--accent', rgbStr);
+  document.documentElement.style.setProperty('--accent-glow', glowStr);
+
+  const preview = document.getElementById('lightbar-preview');
+  if (preview) {
+    preview.style.background = `rgba(${r}, ${g}, ${b}, 0.22)`;
+    preview.style.boxShadow = `0 0 35px rgba(${r}, ${g}, ${b}, 0.45)`;
+    preview.style.borderColor = rgbStr;
+  }
+
+  document.querySelectorAll('.color-orb').forEach((orb, idx) => {
+    const col = DS4_COLORS[idx];
+    if (col && col.r === r && col.g === g && col.b === b) orb.classList.add('selected');
+    else orb.classList.remove('selected');
+  });
+
+  setDS4Lightbar(r, g, b);
+}
+
+window.addEventListener("gamepadconnected", (e) => {
+  const info = classifyController(e.gamepad.id);
+  logEvent(`Port navigateur #${e.gamepad.index} détecté : ${info.label}`, "ok");
+  refreshGamepadListUI();
+});
+
+window.addEventListener("gamepaddisconnected", (e) => {
+  logEvent(`Port navigateur #${e.gamepad.index} déconnecté.`, "warn");
+  refreshGamepadListUI();
+});
+
+// Dessin en direct du Pavé Tactile DualSense (1920x1080) avec séparation Gauche (B17) / Droite (B18) et 2 doigts
+function drawTouchpadSurface(t1Active, t1X, t1Y, t2Active, t2X, t2Y, physClick) {
+  const c = document.getElementById('canvas-touchpad');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Si le pavé est pressé mécaniquement, illuminer la moitié Gauche ou Droite correspondante
+  if (physClick) {
+    const isRight = t1Active && t1X > 960;
+    ctx.fillStyle = 'rgba(59, 130, 246, 0.25)';
+    if (isRight) ctx.fillRect(w / 2, 0, w / 2, h);
+    else ctx.fillRect(0, 0, w / 2, h);
+  }
+
+  // Ligne médiane de séparation Pavé Gauche (B17) / Pavé Droit (B18)
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(w / 2, 6);
+  ctx.lineTo(w / 2, h - 6);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+  ctx.font = '10px Consolas, monospace';
+  ctx.fillText('CLIC GAUCHE (B17)', 10, h - 8);
+  ctx.fillText('CLIC DROIT (B18)', w / 2 + 10, h - 8);
+
+  if (t1Active) {
+    const px1 = (t1X / 1920) * w;
+    const py1 = (t1Y / 1080) * h;
+    ctx.save();
+    ctx.shadowColor = '#60a5fa';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#60a5fa';
+    ctx.beginPath();
+    ctx.arc(px1, py1, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px Consolas';
+    ctx.fillText('1', px1 - 3, py1 + 3);
+    ctx.restore();
+  }
+
+  if (t2Active) {
+    const px2 = (t2X / 1920) * w;
+    const py2 = (t2Y / 1080) * h;
+    ctx.save();
+    ctx.shadowColor = '#10b981';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#10b981';
+    ctx.beginPath();
+    ctx.arc(px2, py2, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px Consolas';
+    ctx.fillText('2', px2 - 3, py2 + 3);
+    ctx.restore();
+  }
+}
+
+function renderControllerTelemetry(lx, ly, rx, ry, l2, r2, buttonsPressedArray) {
+  const lMag = Math.hypot(lx, ly);
+  const rMag = Math.hypot(rx, ry);
+
+  if (lMag < 0.22 && lMag > lsMaxDrift) lsMaxDrift = lMag;
+  if (rMag < 0.22 && rMag > rsMaxDrift) rsMaxDrift = rMag;
+
+  const lDrift = lMag > deadzone && lMag < 0.20;
+  const rDrift = rMag > deadzone && rMag < 0.20;
+
+  const flx = Math.abs(lx) < deadzone ? 0 : lx;
+  const frx = Math.abs(rx) < deadzone ? 0 : rx;
+
+  document.getElementById('ls-x').innerText = lx.toFixed(3);
+  document.getElementById('ls-y').innerText = ly.toFixed(3);
+  document.getElementById('ls-fx').innerText = `${flx.toFixed(2)}`;
+  document.getElementById('ls-drift').innerText = lsMaxDrift.toFixed(3);
+
+  document.getElementById('rs-x').innerText = rx.toFixed(3);
+  document.getElementById('rs-y').innerText = ry.toFixed(3);
+  document.getElementById('rs-fx').innerText = `${frx.toFixed(2)}`;
+  document.getElementById('rs-drift').innerText = rsMaxDrift.toFixed(3);
+
+  const driftBadge = document.getElementById('drift-global-badge');
+  if (lsMaxDrift > deadzone || rsMaxDrift > deadzone) {
+    driftBadge.className = 'chip err';
+    driftBadge.innerText = '⚠️ Drift Détecté';
+  } else {
+    driftBadge.className = 'chip ok';
+    driftBadge.innerText = 'Sticks Nominaux';
+  }
+
+  drawRadarCanvas('canvas-ls', lx, ly, deadzone, lDrift, lsTrail);
+  drawRadarCanvas('canvas-rs', rx, ry, deadzone, rDrift, rsTrail);
+
+  updateTriggerUI('l2', l2);
+  updateTriggerUI('r2', r2);
+
+  const debounceThreshold = parseInt(document.getElementById('debounce-slider').value, 10);
+  const now = performance.now();
+
+  for (let i = 0; i < 20; i++) {
+    const pressed = !!buttonsPressedArray[i];
+    const cell = document.getElementById(`btn-cell-${i}`);
+
+    if (pressed && !prevButtonStates[i]) {
+      const delta = now - lastPressTimestamps[i];
+      if (lastPressTimestamps[i] > 0 && delta < debounceThreshold) {
+        doubleInputFaults[i] = true;
+        logEvent(`⚠️ Rebond anormal sur [${BUTTON_SHORT[i]}] (${Math.round(delta)} ms)`, "fault");
+      }
+      lastPressTimestamps[i] = now;
+      lockedButtons.add(i);
+    }
+    prevButtonStates[i] = pressed;
+
+    if (cell) {
+      let cls = 'pad-key';
+      if (lockedButtons.has(i)) cls += ' tested';
+      if (pressed) cls += ' pressed';
+      if (doubleInputFaults[i]) cls += ' fault';
+      cell.className = cls;
+    }
+  }
+  document.getElementById('lock-counter').innerText = `${lockedButtons.size} / 20`;
+}
+
+function pollGamepad() {
+  const rawGps = navigator.getGamepads ? navigator.getGamepads() : [];
+  const validGps = [];
+  for (let i = 0; i < rawGps.length; i++) {
+    if (rawGps[i] && !hiddenGhostIndices.has(i)) validGps.push(rawGps[i]);
+  }
+
+  const sig = validGps.map(g => `${g.index}:${g.id}`).join('|');
+  if (sig !== lastKnownSlotsSignature) {
+    lastKnownSlotsSignature = sig;
+    refreshGamepadListUI();
+  }
+
+  const autoFocus = document.getElementById('autofocus-gp-toggle')?.checked;
+  if (autoFocus && validGps.length >= 1) {
+    for (const candidate of validGps) {
+      if (candidate.index !== activeGpIndex) {
+        const mainPressed = candidate.buttons.slice(0, 6).some(b => b && b.pressed);
+        if (mainPressed) {
+          onSelectControllerSlot(candidate.index);
+          break;
+        }
+      }
+    }
+  }
+
+  if (activeGpIndex !== 99) {
+    const gp = activeGpIndex !== null ? rawGps[activeGpIndex] : null;
+    if (gp) {
+      const btnArr = new Array(20).fill(false);
+      for (let i = 0; i < Math.min(20, gp.buttons.length); i++) {
+        btnArr[i] = gp.buttons[i] ? gp.buttons[i].pressed : false;
+      }
+      const l2 = gp.buttons[6] ? gp.buttons[6].value : 0;
+      const r2 = gp.buttons[7] ? gp.buttons[7].value : 0;
+      renderControllerTelemetry(gp.axes[0] || 0, gp.axes[1] || 0, gp.axes[2] || 0, gp.axes[3] || 0, l2, r2, btnArr);
+    }
+  }
+
+  requestAnimationFrame(pollGamepad);
+}
+
+function drawRadarCanvas(id, rx, ry, dz, isDrifting, trailArr) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+  const cx = w / 2, cy = h / 2;
+  const maxR = (w / 2) - 14;
+
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.lineWidth = 1;
+  [0.5, 1.0].forEach(scale => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR * scale, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+
+  ctx.beginPath();
+  ctx.moveTo(cx, 10); ctx.lineTo(cx, h - 10);
+  ctx.moveTo(10, cy); ctx.lineTo(w - 10, cy);
+  ctx.stroke();
+
+  const dzR = maxR * dz;
+  ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+  ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, dzR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  const px = cx + rx * maxR;
+  const py = cy + ry * maxR;
+
+  trailArr.push({ x: px, y: py });
+  if (trailArr.length > 14) trailArr.shift();
+
+  for (let i = 0; i < trailArr.length - 1; i++) {
+    const alpha = (i / trailArr.length) * 0.45;
+    ctx.fillStyle = isDrifting ? `rgba(239, 68, 68, ${alpha})` : `rgba(96, 165, 250, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(trailArr[i].x, trailArr[i].y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.shadowColor = isDrifting ? '#ef4444' : '#60a5fa';
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = isDrifting ? '#ef4444' : '#ffffff';
+  ctx.beginPath();
+  ctx.arc(px, py, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function updateTriggerUI(prefix, val) {
+  if (prefix === 'l2' && val > l2Max) l2Max = val;
+  if (prefix === 'r2' && val > r2Max) r2Max = val;
+  const maxVal = prefix === 'l2' ? l2Max : r2Max;
+
+  const pct = Math.round(val * 100);
+  document.getElementById(`bar-${prefix}`).style.height = pct + '%';
+  document.getElementById(`${prefix}-raw`).innerText = val.toFixed(3);
+  document.getElementById(`${prefix}-pct`).innerText = pct + '%';
+  document.getElementById(`${prefix}-max`).innerText = maxVal.toFixed(3);
+
+  const idleEl = document.getElementById(`${prefix}-idle`);
+  if (val > 0.005 && val < 0.05) {
+    idleEl.innerText = 'Résidu';
+    idleEl.style.color = 'var(--danger)';
+  } else {
+    idleEl.innerText = 'OK';
+    idleEl.style.color = 'var(--success)';
+  }
+}
+
+function testRumble(durationMs) {
+  const left = parseFloat(document.getElementById('rumble-l').value);
+  const right = parseFloat(document.getElementById('rumble-r').value);
+
+  const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+  const gp = activeGpIndex !== null && activeGpIndex !== 99 ? gps[activeGpIndex] : null;
+  if (gp && gp.vibrationActuator) {
+    gp.vibrationActuator.playEffect("dual-rumble", {
+      startDelay: 0,
+      duration: durationMs,
+      weakMagnitude: right,
+      strongMagnitude: left
+    });
+  }
+  document.getElementById('rumble-status').innerText = 'Actif...';
+  sendToHost({ action: "testRumble", left, right, duration: durationMs });
+  setTimeout(() => {
+    document.getElementById('rumble-status').innerText = 'Prêt';
+    sendToHost({ action: "testRumble", left: 0, right: 0, duration: 0 });
+  }, durationMs);
+}
+
+function testRumblePulse() {
+  let count = 0;
+  const timer = setInterval(() => {
+    testRumble(120);
+    count++;
+    if (count >= 4) clearInterval(timer);
+  }, 240);
+}
+
+function stopRumble() {
+  const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+  const gp = activeGpIndex !== null && activeGpIndex !== 99 ? gps[activeGpIndex] : null;
+  if (gp && gp.vibrationActuator) gp.vibrationActuator.reset();
+  sendToHost({ action: "testRumble", left: 0, right: 0, duration: 0 });
+}
+
+async function connectWebHID() {
+  if (!navigator.hid) {
+    alert("WebHID n'est pas supporté sur ce navigateur.");
+    return;
+  }
+  try {
+    const devices = await navigator.hid.requestDevice({
+      filters: [
+        { vendorId: 0x054C, productId: 0x05C4 },
+        { vendorId: 0x054C, productId: 0x09CC },
+        { vendorId: 0x054C, productId: 0x0CE6 }
+      ]
+    });
+    if (devices.length > 0) {
+      hidDevice = devices[0];
+      await hidDevice.open();
+      try { await hidDevice.receiveFeatureReport(0x05); } catch (e) {}
+      logEvent(`Périphérique Sony (${hidDevice.productName}) réveillé via WebHID`, "ok");
+      setDS4Lightbar(currentLightbar.r, currentLightbar.g, currentLightbar.b);
+    }
+  } catch (err) { console.error(err); }
+}
+
+async function setDS4Lightbar(r, g, b) {
+  sendToHost({ action: "updateLightbar", color: { r, g, b } });
+}
+
+function exportProfiles() {
+  const blob = new Blob([JSON.stringify(profiles, null, 2)], { type: "application/json" });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = "gamepad_profiles.json";
+  a.click();
+}
+
+function importProfilesFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (Array.isArray(imported) && imported.length > 0) {
+        profiles = imported;
+        localStorage.setItem('gp_profiles', JSON.stringify(profiles));
+        loadProfileByIndex(0, true);
+        saveCurrentProfile(false);
+        logEvent(`${imported.length} profil(s) importé(s) avec succès.`, "ok");
+      }
+    } catch (err) {
+      alert("Fichier JSON invalide.");
+    }
+  };
+  reader.readAsText(file);
+}
+
+function updateDeadzone(val, autoSave = false) {
+  deadzone = parseFloat(val);
+  document.getElementById('dz-val').innerText = deadzone.toFixed(2);
+  document.getElementById('dz-slider').value = deadzone;
+  if (autoSave) saveCurrentProfile(true);
+}
+
+function updateMouseSens(val, autoSave = false) {
+  mouseSensitivity = parseFloat(val);
+  document.getElementById('sens-val').innerText = Math.round(mouseSensitivity);
+  if (autoSave) saveCurrentProfile(true);
+}
+
+function updateTouchpadSens(val, autoSave = false) {
+  touchpadSensitivity = parseFloat(val);
+  document.getElementById('tp-sens-val').innerText = touchpadSensitivity.toFixed(1) + 'x';
+  if (autoSave) saveCurrentProfile(true);
+}
+
+function resetDriftPeaks() { lsMaxDrift = 0; rsMaxDrift = 0; }
+function resetTriggerStats() { l2Max = 0; r2Max = 0; }
+function resetLocks() {
+  lockedButtons.clear();
+  doubleInputFaults.fill(false);
+  document.getElementById('double-input-log').innerHTML = '<div class="log-line">Compteurs réinitialisés.</div>';
+}
+
+function logEvent(msg, type = "") {
+  const box = document.getElementById('double-input-log');
+  const div = document.createElement('div');
+  div.className = 'log-line ' + type;
+  div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  box.prepend(div);
+}
+
+function updateBatteryBadge(pct, charging) {
+  const b = document.getElementById('battery-badge');
+  b.innerText = `🔋 ${pct}% ${charging ? '⚡' : ''}`;
+  b.className = 'chip mono ' + (pct <= 15 ? 'err' : pct <= 30 ? 'warn' : 'ok');
+}
+
+function sendToHost(payload) {
+  if (window.chrome && window.chrome.webview) {
+    window.chrome.webview.postMessage(JSON.stringify(payload));
+  }
+}
+
+if (window.chrome && window.chrome.webview) {
+  window.chrome.webview.addEventListener('message', event => {
+    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+
+    if (data.type === 'initState') {
+      if (Array.isArray(data.profiles) && data.profiles.length > 0) {
+        profiles = data.profiles;
+        localStorage.setItem('gp_profiles', JSON.stringify(profiles));
+      }
+      if (typeof data.autoSwitch === 'boolean') {
+        document.getElementById('autoswitch-toggle').checked = data.autoSwitch;
+      }
+      if (typeof data.mappingEnabled === 'boolean') {
+        mappingMasterEnabled = data.mappingEnabled;
+        updateMappingMasterUI();
+      }
+      if (typeof data.hudEnabled === 'boolean') {
+        document.getElementById('hud-overlay-toggle').checked = data.hudEnabled;
+      }
+      if (typeof data.startupEnabled === 'boolean') {
+        document.getElementById('win-startup-toggle').checked = data.startupEnabled;
+      }
+      const idx = profiles.findIndex(p => p.name.toLowerCase() === (data.activeProfileName || '').toLowerCase());
+      loadProfileByIndex(idx >= 0 ? idx : 0, false);
+      document.getElementById('active-process-badge').innerText = `🎮 ${profiles[activeProfileIdx].name}`;
+    }
+    else if (data.type === 'hardwareInventory') {
+      const box = document.getElementById('sony-hw-list');
+      box.innerHTML = '';
+      if (!data.sonyDevices || data.sonyDevices.length === 0) {
+        box.innerHTML = `<div class="slot-row">Aucune manette Sony détectée sur le bus HID (${escapeHtml(data.xinputCount)} manette(s) XInput active(s)).</div>`;
+      } else {
+        data.sonyDevices.forEach(d => {
+          const row = document.createElement('div');
+          row.className = 'slot-row active-slot';
+          row.innerHTML = `
+            <div>
+              <strong>${escapeHtml(d.name)} [PID:${escapeHtml(d.pid)}] — ${escapeHtml(d.mode)}</strong>
+              <div class="mono" style="font-size:11px; color:var(--text-muted);">${escapeHtml(d.path)} • Trame: ${escapeHtml(d.maxReport)} octets</div>
+            </div>
+            <button class="btn primary" tabindex="-1" onclick="onSelectControllerSlot(99)">Activer Flux Direct</button>
+          `;
+          box.appendChild(row);
+        });
+      }
+    }
+    else if (data.type === 'sonyHidState') {
+      lastCSharpSonyPacketTime = performance.now();
+      document.getElementById('gp-orb').classList.add('connected');
+      document.getElementById('hid-bridge-status').innerText = `Pont C# HID : ${data.mode}`;
+
+      if (typeof data.battery === 'number') {
+        updateBatteryBadge(data.battery, data.charging);
+      }
+
+      const tpBadge = document.getElementById('touchpad-badge');
+      if (tpBadge) {
+        if (data.t1Active && data.t2Active) {
+          tpBadge.className = 'chip accent mono';
+          tpBadge.innerText = `✌️ 2 Doigts (Scroll) : Y=${data.t1Y}`;
+        } else if (data.t1Active) {
+          tpBadge.className = 'chip ok mono';
+          tpBadge.innerText = `👆 1 Doigt : X:${data.t1X} Y:${data.t1Y}`;
+        } else {
+          tpBadge.className = 'chip mono';
+          tpBadge.innerText = `Touchpad : Repos`;
+        }
+      }
+
+      drawTouchpadSurface(data.t1Active, data.t1X, data.t1Y, data.t2Active, data.t2X, data.t2Y, data.physTouchClick);
+
+      const anyBtn = Array.isArray(data.buttons) && data.buttons.some(Boolean);
+      const anyStick = Math.hypot(data.lx || 0, data.ly || 0) > 0.15 || Math.hypot(data.rx || 0, data.ry || 0) > 0.15;
+
+      if (activeGpIndex === 99 || ((anyBtn || anyStick || data.t1Active) && document.getElementById('autofocus-gp-toggle')?.checked)) {
+        if (activeGpIndex !== 99) {
+          activeGpIndex = 99;
+          document.getElementById('gp-selector').value = "99";
+        }
+        document.getElementById('gp-vidpid').innerText = `ACTIF: PONT DIRECT C# HID (${data.mode}) • Raccourcis pausés pendant le test`;
+        renderControllerTelemetry(data.lx || 0, data.ly || 0, data.rx || 0, data.ry || 0, data.l2 || 0, data.r2 || 0, data.buttons || []);
+      }
+    }
+    else if (data.type === 'selectControllerFromTray') {
+      onSelectControllerSlot(data.index, true);
+    }
+    else if (data.type === 'battery') {
+      updateBatteryBadge(data.percent, data.charging);
+    }
+    else if (data.type === 'activeProcess') {
+      if (typeof data.autoSwitch === 'boolean') {
+        document.getElementById('autoswitch-toggle').checked = data.autoSwitch;
+      }
+      if (typeof data.mappingEnabled === 'boolean') {
+        mappingMasterEnabled = data.mappingEnabled;
+        updateMappingMasterUI();
+      }
+      document.getElementById('active-process-badge').innerText = `🎮 ${data.profileName}`;
+      const idx = profiles.findIndex(p => p.name.toLowerCase() === (data.profileName || '').toLowerCase());
+      if (idx >= 0 && idx !== activeProfileIdx) {
+        loadProfileByIndex(idx, false);
+      }
+    }
+  });
+}
+
+initUI();
+requestAnimationFrame(pollGamepad);
+</script>
+</body>
+</html>
