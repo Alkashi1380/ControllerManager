@@ -28,6 +28,7 @@ namespace ControllerManager
 
     public class GamepadProfile
     {
+        public string id { get; set; } = "";
         public string name { get; set; } = "Jeux / Natif (Aucun raccourci)";
         public string exe { get; set; } = "default";
         public double deadzone { get; set; } = 0.08;
@@ -402,7 +403,20 @@ namespace ControllerManager
         private HudOverlayForm? _hudForm;
 
         private List<GamepadProfile> _profiles = new();
-        private string _currentProfileName = "";
+        // Le profil actif est repéré par son id (stable), pas par son nom (modifiable, pas forcément unique)
+        private string _currentProfileId = "";
+
+        private GamepadProfile? GetActiveProfile() =>
+            _profiles.FirstOrDefault(p => p.id == _currentProfileId);
+
+        private string ActiveProfileName => GetActiveProfile()?.name ?? "Jeux / Natif (Aucun raccourci)";
+
+        // Résout un profil envoyé par la page : par id d'abord, puis par nom (anciennes versions de l'UI)
+        private GamepadProfile? FindProfile(string? id, string? name) =>
+            (!string.IsNullOrEmpty(id) ? _profiles.FirstOrDefault(p => p.id == id) : null) ??
+            (!string.IsNullOrEmpty(name)
+                ? _profiles.FirstOrDefault(p => string.Equals(p.name, name, StringComparison.OrdinalIgnoreCase))
+                : null);
         private bool _autoSwitchEnabled = false;
         private bool _mappingEnabled = true;
         private bool _hudEnabled = false;
@@ -475,7 +489,7 @@ namespace ControllerManager
         public TrayApplicationContext(bool startMinimized)
         {
             LoadProfilesFromDisk();
-            _currentProfileName = _profiles.FirstOrDefault()?.name ?? "Jeux / Natif (Aucun raccourci)";
+            _currentProfileId = _profiles.FirstOrDefault()?.id ?? "";
 
             // Abonnement nécessaire pour que Gamepad.Gamepads se remplisse (utilisé uniquement pour la batterie Xbox précise)
             Gamepad.GamepadAdded += (_, _) => { };
@@ -526,7 +540,7 @@ namespace ControllerManager
             contextMenu.Items.Add(_controllersRootMenuItem);
             RebuildTrayControllersMenu();
 
-            _profilesRootMenuItem = new ToolStripMenuItem($"🎮 Profil : {_currentProfileName}");
+            _profilesRootMenuItem = new ToolStripMenuItem($"🎮 Profil : {ActiveProfileName}");
             contextMenu.Items.Add(_profilesRootMenuItem);
             RebuildTrayProfilesMenu();
 
@@ -545,7 +559,7 @@ namespace ControllerManager
             _trayIcon = new NotifyIcon
             {
                 Icon = SystemIcons.Application,
-                Text = $"Gamepad Manager - {_currentProfileName}",
+                Text = $"Gamepad Manager - {ActiveProfileName}",
                 ContextMenuStrip = contextMenu,
                 Visible = true
             };
@@ -566,8 +580,7 @@ namespace ControllerManager
 
         private void ResetTriggersToDefault()
         {
-            var prof = _profiles.FirstOrDefault(p =>
-                string.Equals(p.name, _currentProfileName, StringComparison.OrdinalIgnoreCase));
+            var prof = GetActiveProfile();
             var c = prof?.color ?? new LightbarColor { r = 0, g = 102, b = 255 };
 
             if (prof != null)
@@ -750,8 +763,7 @@ namespace ControllerManager
 
         private void ApplyActiveProfileHardwareEffects()
         {
-            var prof = _profiles.FirstOrDefault(p =>
-                string.Equals(p.name, _currentProfileName, StringComparison.OrdinalIgnoreCase));
+            var prof = GetActiveProfile();
             if (prof == null) return;
 
             var c = prof.color ?? new LightbarColor { r = 0, g = 102, b = 255 };
@@ -765,8 +777,7 @@ namespace ControllerManager
         // --- GESTION MULTIPOINT DU PAVÉ TACTILE (1 DOIGT = SOURIS/CLIC GAUCHE, 2 DOIGTS = SCROLL/CLIC DROIT) ---
         private void ProcessDualSenseMultiTouchpad(bool t1Active, int t1X, int t1Y, bool t2Active, int t2X, int t2Y)
         {
-            var prof = _profiles.FirstOrDefault(p =>
-                string.Equals(p.name, _currentProfileName, StringComparison.OrdinalIgnoreCase));
+            var prof = GetActiveProfile();
 
             if (prof == null || !prof.touchpadMouseEnabled || !_mappingEnabled)
             {
@@ -909,10 +920,10 @@ namespace ControllerManager
         private void RefreshHudOverlayContent()
         {
             if (_hudForm == null || _hudForm.IsDisposed || !_hudEnabled) return;
-            var prof = _profiles.FirstOrDefault(p => string.Equals(p.name, _currentProfileName, StringComparison.OrdinalIgnoreCase));
+            var prof = GetActiveProfile();
             var c = prof?.color ?? new LightbarColor { r = 59, g = 130, b = 246 };
             _hudForm.UpdateHud(
-                _currentProfileName,
+                ActiveProfileName,
                 $"{_lastBatteryPercent}%{(_lastBatteryCharging ? " ⚡" : "")}",
                 _selectedControllerType,
                 Color.FromArgb(c.r, c.g, c.b)
@@ -932,8 +943,7 @@ namespace ControllerManager
             if (!_mappingEnabled || _isDashboardFocused)
                 return;
 
-            var prof = _profiles.FirstOrDefault(p =>
-                string.Equals(p.name, _currentProfileName, StringComparison.OrdinalIgnoreCase));
+            var prof = GetActiveProfile();
             if (prof == null) return;
 
             double dz = prof.deadzone > 0.01 ? prof.deadzone : 0.08;
@@ -1181,35 +1191,34 @@ namespace ControllerManager
             {
                 var item = new ToolStripMenuItem($"{prof.name} ({prof.exe})")
                 {
-                    Checked = string.Equals(prof.name, _currentProfileName, StringComparison.OrdinalIgnoreCase)
+                    Checked = prof.id == _currentProfileId
                 };
-                string targetName = prof.name;
+                string targetId = prof.id;
                 item.Click += (_, _) =>
                 {
                     _autoSwitchEnabled = false;
-                    ApplyProfile(targetName, notifyUser: true);
+                    ApplyProfile(targetId, notifyUser: true);
                 };
                 _profilesRootMenuItem.DropDownItems.Add(item);
             }
 
             string modeTag = _autoSwitchEnabled ? "Auto" : "Verrouillé";
-            _profilesRootMenuItem.Text = $"🎮 Profil : {_currentProfileName} [{modeTag}]";
+            _profilesRootMenuItem.Text = $"🎮 Profil : {ActiveProfileName} [{modeTag}]";
         }
 
-        private void ApplyProfile(string profileName, bool notifyUser)
+        private void ApplyProfile(string profileId, bool notifyUser)
         {
-            var matched = _profiles.FirstOrDefault(p =>
-                string.Equals(p.name, profileName, StringComparison.OrdinalIgnoreCase));
+            var matched = _profiles.FirstOrDefault(p => p.id == profileId);
             if (matched == null) return;
 
-            bool changed = !string.Equals(_currentProfileName, matched.name, StringComparison.OrdinalIgnoreCase);
-            _currentProfileName = matched.name;
+            bool changed = _currentProfileId != matched.id;
+            _currentProfileId = matched.id;
 
             ApplyActiveProfileHardwareEffects();
 
             RebuildTrayProfilesMenu();
             RefreshHudOverlayContent();
-            _trayIcon.Text = $"Gamepad Manager - {_currentProfileName}";
+            _trayIcon.Text = $"Gamepad Manager - {ActiveProfileName}";
 
             if (notifyUser && changed)
             {
@@ -1659,8 +1668,7 @@ namespace ControllerManager
             if (!_mappingEnabled || _isDashboardFocused)
                 return;
 
-            var activeProfile = _profiles.FirstOrDefault(p =>
-                string.Equals(p.name, _currentProfileName, StringComparison.OrdinalIgnoreCase));
+            var activeProfile = GetActiveProfile();
 
             if (activeProfile != null &&
                 activeProfile.buttonMapping != null &&
@@ -1749,7 +1757,8 @@ namespace ControllerManager
                     {
                         type = "activeProcess",
                         exe = exeName,
-                        profileName = _currentProfileName,
+                        profileId = _currentProfileId,
+                        profileName = ActiveProfileName,
                         autoSwitch = _autoSwitchEnabled,
                         mappingEnabled = _mappingEnabled
                     });
@@ -1761,9 +1770,9 @@ namespace ControllerManager
                     p.exe.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                          .Any(e => string.Equals(e, exeName, StringComparison.OrdinalIgnoreCase)));
 
-                if (matched != null && !string.Equals(matched.name, _currentProfileName, StringComparison.OrdinalIgnoreCase))
+                if (matched != null && matched.id != _currentProfileId)
                 {
-                    ApplyProfile(matched.name, notifyUser: true);
+                    ApplyProfile(matched.id, notifyUser: true);
                 }
                 else
                 {
@@ -1771,7 +1780,8 @@ namespace ControllerManager
                     {
                         type = "activeProcess",
                         exe = exeName,
-                        profileName = _currentProfileName,
+                        profileId = _currentProfileId,
+                        profileName = ActiveProfileName,
                         autoSwitch = _autoSwitchEnabled,
                         mappingEnabled = _mappingEnabled
                     });
@@ -1860,12 +1870,13 @@ namespace ControllerManager
                 }
                 else if (action == "selectProfile")
                 {
-                    string profName = root.GetProperty("profileName").GetString() ?? "";
+                    var target = FindProfile(OptString(root, "profileId"), OptString(root, "profileName"));
                     if (root.TryGetProperty("autoSwitch", out var autoProp))
                     {
                         _autoSwitchEnabled = autoProp.GetBoolean();
                     }
-                    ApplyProfile(profName, notifyUser: false);
+                    if (target != null)
+                        ApplyProfile(target.id, notifyUser: false);
                 }
                 else if (action == "setAutoSwitch")
                 {
@@ -1879,13 +1890,11 @@ namespace ControllerManager
                     Directory.CreateDirectory(AppDataDir);
                     File.WriteAllText(ProfilesFilePath, rawProfiles);
                     LoadProfilesFromDisk();
+                    // Réécrit le fichier pour y figer les id générés pendant le chargement
+                    SaveProfilesToDisk();
 
-                    if (root.TryGetProperty("activeProfileName", out var activeProp))
-                    {
-                        string requestedActive = activeProp.GetString() ?? "";
-                        if (!string.IsNullOrEmpty(requestedActive))
-                            _currentProfileName = requestedActive;
-                    }
+                    var requested = FindProfile(OptString(root, "activeProfileId"), OptString(root, "activeProfileName"));
+                    _currentProfileId = requested?.id ?? GetActiveProfile()?.id ?? _profiles.FirstOrDefault()?.id ?? "";
 
                     ApplyActiveProfileHardwareEffects();
                     RebuildTrayProfilesMenu();
@@ -1914,7 +1923,7 @@ namespace ControllerManager
 
                     XInput.SetVibration(XInput.FindSlot(_selectedWebGpIndex), left, right);
 
-                    var prof = _profiles.FirstOrDefault(p => string.Equals(p.name, _currentProfileName, StringComparison.OrdinalIgnoreCase));
+                    var prof = GetActiveProfile();
                     var col = prof?.color ?? new LightbarColor { r = 0, g = 102, b = 255 };
                     SendDualSenseOutputReport(
                         col.r, col.g, col.b,
@@ -1926,7 +1935,7 @@ namespace ControllerManager
                 else if (action == "updateLightbar")
                 {
                     var c = root.GetProperty("color");
-                    var prof = _profiles.FirstOrDefault(p => string.Equals(p.name, _currentProfileName, StringComparison.OrdinalIgnoreCase));
+                    var prof = GetActiveProfile();
                     SendDualSenseOutputReport(
                         (byte)c.GetProperty("r").GetInt32(),
                         (byte)c.GetProperty("g").GetInt32(),
@@ -1939,13 +1948,27 @@ namespace ControllerManager
             catch { }
         }
 
+        private static string? OptString(JsonElement root, string property) =>
+            root.TryGetProperty(property, out var prop) && prop.ValueKind == JsonValueKind.String ? prop.GetString() : null;
+
+        private void SaveProfilesToDisk()
+        {
+            try
+            {
+                Directory.CreateDirectory(AppDataDir);
+                File.WriteAllText(ProfilesFilePath, JsonSerializer.Serialize(_profiles));
+            }
+            catch { }
+        }
+
         private void SyncStateToWebView()
         {
             SendToWebView(new
             {
                 type = "initState",
                 profiles = _profiles,
-                activeProfileName = _currentProfileName,
+                activeProfileId = _currentProfileId,
+                activeProfileName = ActiveProfileName,
                 autoSwitch = _autoSwitchEnabled,
                 mappingEnabled = _mappingEnabled,
                 hudEnabled = _hudEnabled,
@@ -1998,6 +2021,7 @@ namespace ControllerManager
                             if (p.r2TriggerForce <= 0) p.r2TriggerForce = 180;
                         }
                         _profiles = loaded;
+                        EnsureProfileIds();
                         return;
                     }
                 }
@@ -2081,6 +2105,21 @@ namespace ControllerManager
                     }
                 }
             };
+            EnsureProfileIds();
+        }
+
+        // Donne un id unique aux profils qui n'en ont pas (anciens fichiers) ou qui partagent le même
+        private void EnsureProfileIds()
+        {
+            var seen = new HashSet<string>();
+            foreach (var p in _profiles)
+            {
+                if (string.IsNullOrWhiteSpace(p.id) || !seen.Add(p.id))
+                {
+                    p.id = Guid.NewGuid().ToString("N");
+                    seen.Add(p.id);
+                }
+            }
         }
 
         protected override void ExitThreadCore()
