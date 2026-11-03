@@ -49,9 +49,11 @@ jobs:
       - name: Empreintes SHA-256
         shell: pwsh
         run: |
-          Get-ChildItem artifacts/installer -File | ForEach-Object {
-            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
-          } | Out-File artifacts/installer/SHA256SUMS.txt -Encoding ascii
+          # Liste figée avant d'écrire : sinon SHA256SUMS.txt (encore ouvert) se retrouve dans le pipeline
+          $files = @(Get-ChildItem artifacts/installer -File)
+          $lines = $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
+          $lines | Out-File artifacts/installer/SHA256SUMS.txt -Encoding ascii
+          $lines
 
       - name: Version GitHub
         uses: softprops/action-gh-release@v2
