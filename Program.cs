@@ -29,8 +29,15 @@ namespace ControllerManager
 
             bool startMinimized = args.Contains("--tray");
             Log.Info($"Démarrage ControllerManager {Application.ProductVersion} (tray={startMinimized}, admin={ElevationHelper.IsCurrentProcessElevated})");
-            Application.Run(new TrayApplicationContext(startMinimized));
-            mutex.ReleaseMutex();
+            try
+            {
+                Application.Run(new TrayApplicationContext(startMinimized));
+            }
+            finally
+            {
+                try { mutex.ReleaseMutex(); }
+                catch (ApplicationException) { }
+            }
         }
     }
 }

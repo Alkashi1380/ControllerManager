@@ -30,7 +30,7 @@
     <None Update="UI\index.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="profiles.json">
+    <None Update="Assets\app.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <!-- Sources de l'installateur : hors de la compilation de l'appli -->

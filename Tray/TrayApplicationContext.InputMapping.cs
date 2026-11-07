@@ -2,95 +2,596 @@ namespace ControllerManager
 {
     public partial class TrayApplicationContext
     {
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+
+        private DateTime _lastKeyboardShortcutCheck = DateTime.MinValue;
+        private DateTime _lastXboxWebUiPush = DateTime.MinValue;
+        private DateTime _lastWebGamepadStickStep = DateTime.Now;
+        private volatile int _lastXInputSlot = -1;
+        private volatile bool _isCapturingShortcutInUi = false;
+        private readonly HashSet<string> _activeProfileKeyShortcuts = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string>[] _activeProfilePadShortcuts =
+        {
+            new(StringComparer.OrdinalIgnoreCase),
+            new(StringComparer.OrdinalIgnoreCase)
+        };
+        private readonly object _inputStateLock = new();
+        private readonly ActionRunner[] _controllerActions = { new(), new() };
+        private readonly bool[] _xboxCurButtons = new bool[20];
+        private readonly bool[] _prevXboxButtons = new bool[20];
+        private readonly DateTime[,] _pendingSinglePressTime = new DateTime[2, 20];
+
         private void InputPollingLoop()
         {
             byte[] sonyBuffer = new byte[128];
             byte[] drainBuffer = new byte[128];
             DateTime lastSonyStickStep = DateTime.Now;
             DateTime lastXboxStickStep = DateTime.Now;
+            DateTime lastXboxPoll = DateTime.MinValue;
             int xSlot = -1;
             DateTime lastXInputScan = DateTime.MinValue;
 
-            while (true)
+            while (!_isShuttingDown)
             {
-                // Interroger un slot XInput déconnecté est coûteux : on ne re-scanne qu'une fois par seconde
-                if ((DateTime.Now - lastXInputScan).TotalMilliseconds > 1000)
+                // Surveillance globale des raccourcis clavier par profil (toutes les 25 ms)
+                if ((DateTime.Now - _lastKeyboardShortcutCheck).TotalMilliseconds >= 25)
+                {
+                    _lastKeyboardShortcutCheck = DateTime.Now;
+                    CheckGlobalProfileKeyboardShortcuts();
+                }
+
+                // Interroger un slot XInput déconnecté est coûteux : on ne re-scanne qu'une fois toutes les 2 secondes
+                int preferredSlot = _selectedWebGpIndex;
+                bool checkPreferredSlot = preferredSlot is >= 0 and < 4 && preferredSlot != xSlot;
+                if ((xSlot < 0 || checkPreferredSlot) && (DateTime.Now - lastXInputScan).TotalMilliseconds > 2000)
                 {
                     lastXInputScan = DateTime.Now;
-                    xSlot = XInput.FindSlot(_selectedWebGpIndex);
+                    int newSlot = xSlot < 0 ? XInput.FindSlot(preferredSlot)
+                        : XInput.IsConnected(preferredSlot) ? preferredSlot : xSlot;
+                    bool slotChanged = newSlot != xSlot;
+                    if (slotChanged)
+                    {
+                        lock (_inputStateLock)
+                        {
+                            ResetControllerInput(SourceXbox);
+                            xSlot = newSlot;
+                            _xboxConnectedSince = DateTime.Now;
+                            _lastXInputSlot = newSlot;
+                        }
+                    }
+
+                    if (slotChanged)
+                    {
+                        Log.Info($"Manette Xbox (XInput slot #{xSlot}) détectée — stabilisation Bluetooth LE (2,5 s)");
+
+                        if (_activeSonyStream == null && (_selectedWebGpIndex == 99 || _selectedControllerType != "XBOX"))
+                        {
+                            SetControllerSelection(newSlot, "XBOX");
+                            RunOnUiThread(() =>
+                            {
+                                RebuildTrayControllersMenu();
+                                RebuildTrayProfilesMenu();
+                                RefreshHudOverlayContent();
+                                SendToWebView(new { type = "selectControllerFromTray", index = newSlot });
+                                SyncStateToWebView();
+                            });
+                        }
+                    }
                 }
 
-                // Mode multi-manettes : Sony et Xbox pilotent en même temps ; sinon seule la manette choisie agit
-                bool multi = _multiControllerEnabled;
-                bool sonySelected = _selectedControllerType == "PS5" || _selectedControllerType == "PS4" || _selectedWebGpIndex == 99 || xSlot < 0;
+                bool sonyPolled = PollSonyPersistentStream(sonyBuffer, drainBuffer, ref lastSonyStickStep);
 
-                bool sonyPolled = (multi || sonySelected) &&
-                                  PollSonyPersistentStream(sonyBuffer, drainBuffer, ref lastSonyStickStep);
-
-                bool pollXbox = xSlot >= 0 && (multi || !sonyPolled);
-                if (!pollXbox)
+                if (xSlot < 0)
                 {
-                    System.Threading.Thread.Sleep(sonyPolled ? 1 : 8);
+                    System.Threading.Thread.Sleep(sonyPolled ? 2 : 10);
                     continue;
                 }
 
-                // La lecture Sony bloque déjà jusqu'à 4 ms : pas d'attente supplémentaire dans ce cas
-                if (!sonyPolled)
-                    System.Threading.Thread.Sleep(8);
-
-                if (XInput.XInputGetState((uint)xSlot, out var state) != XInput.ERROR_SUCCESS)
+                // Garde anti-extinction Xbox Bluetooth LE :
+                // 1. Pendant les 2,5 premières secondes suivant l'allumage de la manette Xbox, le pilote Bluetooth LE / GIP
+                //    négocie ses paramètres GATT. L'interroger à haute fréquence pendant cette fenêtre coupe la liaison.
+                // 2. Même après stabilisation, on cadence XInputGetState à 60 Hz maximum (toutes les 16 ms) pour ne jamais
+                //    inonder le pilote Xbox quand la PS5 tourne à 250 Hz dans la même boucle.
+                double xboxConnMs = (DateTime.Now - _xboxConnectedSince).TotalMilliseconds;
+                double minXboxIntervalMs = xboxConnMs < 2500 ? 250.0 : 16.0;
+                if ((DateTime.Now - lastXboxPoll).TotalMilliseconds < minXboxIntervalMs)
                 {
-                    xSlot = -1;
+                    if (!sonyPolled)
+                        System.Threading.Thread.Sleep(8);
+                    continue;
+                }
+                lastXboxPoll = DateTime.Now;
+
+                if (XInput.GetState((uint)xSlot, out var state) != XInput.ERROR_SUCCESS)
+                {
+                    lock (_inputStateLock)
+                    {
+                        ResetControllerInput(SourceXbox);
+                        xSlot = -1;
+                        _lastXInputSlot = -1;
+                    }
+                    _xboxConnectedSince = DateTime.MinValue;
+                    lastXInputScan = DateTime.Now;
                     continue;
                 }
 
-                PollXboxState(state.Gamepad, ref lastXboxStickStep);
+                // On n'envoie rien à WebView2 pendant les 2,5 premières secondes de stabilisation Xbox
+                if (xboxConnMs >= 2500)
+                {
+                    PollXboxState(xSlot, state.Gamepad, ref lastXboxStickStep);
+                }
             }
         }
 
-        private void PollXboxState(XInput.XINPUT_GAMEPAD pad, ref DateTime lastStickStep)
+        private void PollXboxState(int xSlot, XInput.XINPUT_GAMEPAD pad, ref DateTime lastStickStep)
         {
             ushort buttons = pad.wButtons;
 
-            HandlePauseCombo((buttons & XInput.BACK) != 0 && (buttons & XInput.START) != 0, SourceXbox);
+            _xboxCurButtons[0] = (buttons & XInput.A) != 0;
+            _xboxCurButtons[1] = (buttons & XInput.B) != 0;
+            _xboxCurButtons[2] = (buttons & XInput.X) != 0;
+            _xboxCurButtons[3] = (buttons & XInput.Y) != 0;
+            _xboxCurButtons[4] = (buttons & XInput.LEFT_SHOULDER) != 0;
+            _xboxCurButtons[5] = (buttons & XInput.RIGHT_SHOULDER) != 0;
+            _xboxCurButtons[6] = pad.bLeftTrigger > 64;
+            _xboxCurButtons[7] = pad.bRightTrigger > 64;
+            _xboxCurButtons[8] = (buttons & XInput.BACK) != 0;
+            _xboxCurButtons[9] = (buttons & XInput.START) != 0;
+            _xboxCurButtons[10] = (buttons & XInput.LEFT_THUMB) != 0;
+            _xboxCurButtons[11] = (buttons & XInput.RIGHT_THUMB) != 0;
+            _xboxCurButtons[12] = (buttons & XInput.DPAD_UP) != 0;
+            _xboxCurButtons[13] = (buttons & XInput.DPAD_DOWN) != 0;
+            _xboxCurButtons[14] = (buttons & XInput.DPAD_LEFT) != 0;
+            _xboxCurButtons[15] = (buttons & XInput.DPAD_RIGHT) != 0;
+            _xboxCurButtons[16] = (buttons & XInput.GUIDE) != 0;
+            _xboxCurButtons[17] = false;
+            _xboxCurButtons[18] = false;
+            _xboxCurButtons[19] = false;
 
-            CheckButton(buttons, XInput.A, 0);
-            CheckButton(buttons, XInput.B, 1);
-            CheckButton(buttons, XInput.X, 2);
-            CheckButton(buttons, XInput.Y, 3);
-            CheckButton(buttons, XInput.LEFT_SHOULDER, 4);
-            CheckButton(buttons, XInput.RIGHT_SHOULDER, 5);
-            CheckButton(buttons, XInput.BACK, 8);
-            CheckButton(buttons, XInput.START, 9);
-            CheckButton(buttons, XInput.LEFT_THUMB, 10);
-            CheckButton(buttons, XInput.RIGHT_THUMB, 11);
-            CheckButton(buttons, XInput.DPAD_UP, 12);
-            CheckButton(buttons, XInput.DPAD_DOWN, 13);
-            CheckButton(buttons, XInput.DPAD_LEFT, 14);
-            CheckButton(buttons, XInput.DPAD_RIGHT, 15);
+            float lx = Math.Clamp(pad.sThumbLX / 32767f, -1f, 1f);
+            float ly = Math.Clamp(-pad.sThumbLY / 32767f, -1f, 1f);
+            float rx = Math.Clamp(pad.sThumbRX / 32767f, -1f, 1f);
+            float ry = Math.Clamp(-pad.sThumbRY / 32767f, -1f, 1f);
+            float l2Val = pad.bLeftTrigger / 255f;
+            float r2Val = pad.bRightTrigger / 255f;
 
-            CheckTrigger(pad.bLeftTrigger / 255.0, ref _prevLT, 6);
-            CheckTrigger(pad.bRightTrigger / 255.0, ref _prevRT, 7);
-
-            if ((DateTime.Now - lastStickStep).TotalMilliseconds >= 8)
+            bool buttonChanged;
+            lock (_inputStateLock)
             {
-                lastStickStep = DateTime.Now;
-                ProcessAnalogSticksMapping(
-                    Math.Max(-1f, pad.sThumbLX / 32767f),
-                    -Math.Max(-1f, pad.sThumbLY / 32767f),
-                    Math.Max(-1f, pad.sThumbRX / 32767f),
-                    -Math.Max(-1f, pad.sThumbRY / 32767f),
-                    SourceXbox
-                );
+                bool enabled = CanUseController(SourceXbox);
+                buttonChanged = ProcessControllerButtons(_xboxCurButtons, SourceXbox, enabled);
+                if (enabled && (DateTime.Now - lastStickStep).TotalMilliseconds >= 8)
+                {
+                    lastStickStep = DateTime.Now;
+                    ProcessAnalogSticksMapping(lx, ly, rx, ry, SourceXbox);
+                }
+            }
+
+            if (_webView != null && (buttonChanged || (DateTime.Now - _lastXboxWebUiPush).TotalMilliseconds >= 16))
+            {
+                _lastXboxWebUiPush = DateTime.Now;
+                SendToWebView(new
+                {
+                    type = "xboxHidState",
+                    slot = xSlot,
+                    lx,
+                    ly,
+                    rx,
+                    ry,
+                    l2 = l2Val,
+                    r2 = r2Val,
+                    buttons = _xboxCurButtons
+                });
             }
 
             _prevButtons = buttons;
+        }
+
+        // Repli WebGamepad : si une manette Xbox Bluetooth LE / générique est lue par WebView2 alors que XInput ne la voit pas
+        private void PollWebGamepadState(bool[] curButtons, float lx, float ly, float rx, float ry)
+        {
+            lock (_inputStateLock)
+            {
+                if (_lastXInputSlot >= 0) return;
+
+                bool enabled = CanUseController(SourceXbox);
+                ProcessControllerButtons(curButtons, SourceXbox, enabled);
+                if (enabled && (DateTime.Now - _lastWebGamepadStickStep).TotalMilliseconds >= 8)
+                {
+                    _lastWebGamepadStickStep = DateTime.Now;
+                    ProcessAnalogSticksMapping(lx, ly, rx, ry, SourceXbox);
+                }
+            }
+        }
+
+        private int SelectedControllerSource => _selectedControllerType == "XBOX" ? SourceXbox : SourceSony;
+
+        private bool CanUseController(int source) =>
+            !_isShuttingDown && (_multiControllerEnabled || source == SelectedControllerSource);
+
+        private void SetControllerSelection(int index, string type)
+        {
+            lock (_inputStateLock)
+            {
+                int previousSource = SelectedControllerSource;
+                _selectedWebGpIndex = index;
+                _selectedControllerType = type;
+                if (!_multiControllerEnabled && previousSource != SelectedControllerSource)
+                    ReleaseControllerOutputs(previousSource);
+            }
+        }
+
+        private void ReleaseControllerOutputs(int source)
+        {
+            _controllerActions[source].ReleaseAll();
+            ReleaseStickOutputs(source);
+            ClearPendingComboCandidatePresses(source);
+            if (source == SourceSony)
+                ResetSonyTouchpadInput();
+        }
+
+        private void ReleaseAllControllerOutputs()
+        {
+            lock (_inputStateLock)
+            {
+                ReleaseControllerOutputs(SourceSony);
+                ReleaseControllerOutputs(SourceXbox);
+                _actionRunner.ReleaseAll(); // Action lancée par le bouton « Tester ».
+            }
+        }
+
+        private void ResetControllerInput(int source)
+        {
+            ReleaseControllerOutputs(source);
+            Array.Clear(source == SourceSony ? _prevSonyButtons : _prevXboxButtons);
+            _activeProfilePadShortcuts[source].Clear();
+            _prevPauseCombo[source] = false;
+            _prevProfilePrevCombo[source] = false;
+            _prevProfileNextCombo[source] = false;
+            if (source == SourceSony)
+            {
+                _prevPhysTouchClick = false;
+                _touchClickLatchedRight = false;
+            }
+        }
+
+        private void ResetSonyTouchpadInput()
+        {
+            _prevTouch1 = _prevTouch2 = false;
+            _touchStartTime = DateTime.MinValue;
+            _tpScrollCarry = 0;
+        }
+
+        private bool ProcessControllerButtons(bool[] cur, int source, bool enabled)
+        {
+            bool isSony = source == SourceSony;
+            bool[] previous = isSony ? _prevSonyButtons : _prevXboxButtons;
+            bool modifier = cur[16] || (!isSony && cur[8]);
+            bool pause = modifier && cur[9];
+            bool previousProfile = modifier && cur[4];
+            bool nextProfile = modifier && cur[5];
+
+            if (!enabled)
+            {
+                // Continue à lire l'état physique pour le dashboard et évite de rejouer un appui déjà tenu.
+                bool changed = !cur.AsSpan().SequenceEqual(previous);
+                cur.CopyTo(previous, 0);
+                _prevPauseCombo[source] = pause;
+                _prevProfilePrevCombo[source] = previousProfile;
+                _prevProfileNextCombo[source] = nextProfile;
+                CheckCustomProfileGamepadShortcuts(cur, source, trigger: false);
+                return changed;
+            }
+
+            HandlePauseCombo(pause, source);
+            HandleProfileSwitchCombo(previousProfile, nextProfile, source);
+            bool custom = CheckCustomProfileGamepadShortcuts(cur, source);
+            ProcessGamepadButtonsWithComboGuard(cur, previous, pause || previousProfile || nextProfile || custom,
+                source, isSony, out bool buttonChanged);
+            return buttonChanged;
+        }
+
+        private bool IsButtonInAnyCombo(int btnIdx, int source)
+        {
+            // Les deux côtés des combos système doivent attendre : PS/Guide/View + L1/LB, R1/RB ou Options/Menu.
+            if (btnIdx is 4 or 5 or 9 or 16 || (source == SourceXbox && btnIdx == 8))
+                return true;
+
+            var snapshot = _profiles;
+            if (snapshot == null) return false;
+
+            foreach (var prof in snapshot)
+            {
+                if (string.IsNullOrWhiteSpace(prof.shortcutButtons)) continue;
+                var parts = prof.shortcutButtons.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (parts.Length < 2) continue;
+                foreach (var p in parts)
+                {
+                    if (int.TryParse(p, out int idx))
+                    {
+                        if (idx == btnIdx) return true;
+                        if (source == SourceXbox && idx == 16 && btnIdx == 8) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private void ClearPendingComboCandidatePresses(int source)
+        {
+            for (int i = 0; i < 20; i++)
+                _pendingSinglePressTime[source, i] = DateTime.MinValue;
+        }
+
+        // Gère les 20 boutons avec une fenêtre anti-collision de 85 ms sur les boutons participant à une combinaison
+        // (évite que PS+R1 ou LB+RB ne déclenche Win+D ou Alt+Tab sur le premier bouton pressé)
+        private void ProcessGamepadButtonsWithComboGuard(
+            bool[] cur, bool[] prev, bool anyComboActive, int source, bool isSony, out bool buttonChanged)
+        {
+            buttonChanged = false;
+            var now = DateTime.Now;
+
+            if (anyComboActive)
+            {
+                ClearPendingComboCandidatePresses(source);
+            }
+
+            for (int i = 0; i < 20; i++)
+            {
+                if (cur[i] != prev[i])
+                    buttonChanged = true;
+
+                if (cur[i] && !prev[i])
+                {
+                    if (isSony && i == 19 && !anyComboActive)
+                    {
+                        _muteLedActive = !_muteLedActive;
+                        ApplyActiveProfileHardwareEffects();
+                    }
+
+                    if (!anyComboActive)
+                    {
+                        if (IsButtonInAnyCombo(i, source))
+                        {
+                            _pendingSinglePressTime[source, i] = now;
+                        }
+                        else
+                        {
+                            ExecuteMapping(i, source);
+                        }
+                    }
+                }
+                else if (cur[i] && prev[i])
+                {
+                    DateTime pendingAt = _pendingSinglePressTime[source, i];
+                    if (pendingAt != DateTime.MinValue)
+                    {
+                        if (anyComboActive)
+                        {
+                            _pendingSinglePressTime[source, i] = DateTime.MinValue;
+                        }
+                        else if ((now - pendingAt).TotalMilliseconds >= 85)
+                        {
+                            _pendingSinglePressTime[source, i] = DateTime.MinValue;
+                            ExecuteMapping(i, source);
+                        }
+                    }
+                }
+                else if (!cur[i] && prev[i])
+                {
+                    DateTime pendingAt = _pendingSinglePressTime[source, i];
+                    if (pendingAt != DateTime.MinValue)
+                    {
+                        _pendingSinglePressTime[source, i] = DateTime.MinValue;
+                        if (!anyComboActive)
+                        {
+                            ExecuteMapping(i, source);
+                        }
+                    }
+                    ReleaseMapping(i, source);
+                }
+
+                prev[i] = cur[i];
+            }
+        }
+
+        private static bool IsVkDown(byte vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
+
+        private static bool HasModifier(IReadOnlyList<byte> mods, byte target)
+        {
+            for (int i = 0; i < mods.Count; i++)
+            {
+                if (mods[i] == target) return true;
+            }
+            return false;
+        }
+
+        // Raccourci 1 par profil : Touche / Combinaison clavier globale (ex. Ctrl+F1, Alt+1, F9)
+        private void CheckGlobalProfileKeyboardShortcuts()
+        {
+            if (_isCapturingShortcutInUi)
+            {
+                _activeProfileKeyShortcuts.Clear();
+                return;
+            }
+
+            var snapshot = _profiles;
+            if (snapshot == null || snapshot.Count == 0) return;
+
+            bool ctrlDown = IsVkDown(0x11);
+            bool shiftDown = IsVkDown(0x10);
+            bool altDown = IsVkDown(0x12);
+            bool winDown = IsVkDown(0x5B) || IsVkDown(0x5C);
+
+            int startIdx = snapshot.FindIndex(p => p.id == _currentProfileId);
+            startIdx = startIdx >= 0 ? (startIdx + 1) % snapshot.Count : 0;
+
+            var currentlyDownKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string? triggeredProfileId = null;
+
+            for (int offset = 0; offset < snapshot.Count; offset++)
+            {
+                var prof = snapshot[(startIdx + offset) % snapshot.Count];
+                if (string.IsNullOrWhiteSpace(prof.shortcutKey)) continue;
+                string keySig = prof.shortcutKey.Trim();
+                if (!KeyCombo.TryParse(keySig, out var combo) || combo == null) continue;
+
+                bool reqCtrl = HasModifier(combo.Modifiers, 0x11);
+                bool reqShift = HasModifier(combo.Modifiers, 0x10);
+                bool reqAlt = HasModifier(combo.Modifiers, 0x12);
+                bool reqWin = HasModifier(combo.Modifiers, 0x5B);
+
+                bool modifiersMatch = (ctrlDown == reqCtrl) &&
+                                      (shiftDown == reqShift) &&
+                                      (altDown == reqAlt) &&
+                                      (!reqWin || winDown);
+
+                if (modifiersMatch && IsVkDown(combo.Key))
+                {
+                    currentlyDownKeys.Add(keySig);
+                    if (triggeredProfileId == null && !_activeProfileKeyShortcuts.Contains(keySig))
+                    {
+                        triggeredProfileId = prof.id;
+                    }
+                }
+            }
+
+            _activeProfileKeyShortcuts.RemoveWhere(k => !currentlyDownKeys.Contains(k));
+            foreach (var k in currentlyDownKeys)
+                _activeProfileKeyShortcuts.Add(k);
+
+            if (triggeredProfileId != null)
+            {
+                var now = DateTime.Now;
+                if ((now - _lastProfileSwitch).TotalMilliseconds >= ProfileSwitchCooldownMs)
+                {
+                    _lastProfileSwitch = now;
+                    string targetId = triggeredProfileId;
+                    RunOnUiThread(() =>
+                    {
+                        _autoSwitchEnabled = false;
+                        ApplyProfile(targetId, notifyUser: true);
+                    });
+                }
+            }
+        }
+
+        // Raccourci 2 par profil : Combinaison de boutons manette (ex. "4+0" = LB/L1 + A/Croix)
+        private bool CheckCustomProfileGamepadShortcuts(IReadOnlyList<bool> curButtons, int source, bool trigger = true)
+        {
+            if (_isCapturingShortcutInUi)
+            {
+                _activeProfilePadShortcuts[source].Clear();
+                return false;
+            }
+
+            var snapshot = _profiles;
+            if (snapshot == null || snapshot.Count == 0) return false;
+
+            string activeId = source == SourceXbox ? _currentXboxProfileId : _currentProfileId;
+            int startIdx = snapshot.FindIndex(p => p.id == activeId);
+            startIdx = startIdx >= 0 ? (startIdx + 1) % snapshot.Count : 0;
+
+            var currentlyDownCombos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string? triggeredProfileId = null;
+
+            for (int offset = 0; offset < snapshot.Count; offset++)
+            {
+                var prof = snapshot[(startIdx + offset) % snapshot.Count];
+                if (string.IsNullOrWhiteSpace(prof.shortcutButtons)) continue;
+
+                string comboSig = prof.shortcutButtons.Trim();
+                var parts = comboSig.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (parts.Length == 0) continue;
+
+                bool allPressed = true;
+                int validCount = 0;
+                foreach (var part in parts)
+                {
+                    if (int.TryParse(part, out int btnIdx) && btnIdx >= 0 && btnIdx < curButtons.Count)
+                    {
+                        validCount++;
+                        bool isBtnDown = curButtons[btnIdx];
+                        // Sur manette Xbox, un raccourci configuré avec B16 (PS/Guide) accepte aussi B8 (View/Back)
+                        if (!isBtnDown && source == SourceXbox && btnIdx == 16 && curButtons.Count > 8)
+                            isBtnDown = curButtons[8];
+
+                        if (!isBtnDown)
+                        {
+                            allPressed = false;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        allPressed = false;
+                        break;
+                    }
+                }
+
+                if (validCount > 0 && allPressed)
+                {
+                    currentlyDownCombos.Add(comboSig);
+                    if (trigger && triggeredProfileId == null && !_activeProfilePadShortcuts[source].Contains(comboSig))
+                    {
+                        triggeredProfileId = prof.id;
+                    }
+                }
+            }
+
+            _activeProfilePadShortcuts[source].RemoveWhere(c => !currentlyDownCombos.Contains(c));
+            foreach (var c in currentlyDownCombos)
+                _activeProfilePadShortcuts[source].Add(c);
+
+            if (triggeredProfileId != null)
+            {
+                var now = DateTime.Now;
+                if ((now - _lastProfileSwitch).TotalMilliseconds >= ProfileSwitchCooldownMs)
+                {
+                    _lastProfileSwitch = now;
+                    string targetId = triggeredProfileId;
+                    int targetSrc = source;
+                    RunOnUiThread(() =>
+                    {
+                        if (!CanUseController(targetSrc)) return;
+                        _autoSwitchEnabled = false;
+                        ApplyProfile(targetId, notifyUser: true, targetSource: targetSrc);
+                    });
+                }
+            }
+
+            return currentlyDownCombos.Count > 0;
         }
 
         // Combo manette (PS + Options / View + Menu) : bascule les raccourcis sans passer par le menu
         private readonly bool[] _prevPauseCombo = new bool[2];
         private const int PauseToggleCooldownMs = 1000;
         private DateTime _lastPauseToggle = DateTime.MinValue;
+
+        // Combo changement de profil à la volée (PS + L1 / R1 sur Sony, View + LB / RB sur Xbox)
+        private readonly bool[] _prevProfilePrevCombo = new bool[2];
+        private readonly bool[] _prevProfileNextCombo = new bool[2];
+        private const int ProfileSwitchCooldownMs = 150;
+        private DateTime _lastProfileSwitch = DateTime.MinValue;
+
+        private void HandleProfileSwitchCombo(bool prevDown, bool nextDown, int source)
+        {
+            bool prevPressed = prevDown && !_prevProfilePrevCombo[source];
+            bool nextPressed = nextDown && !_prevProfileNextCombo[source];
+            _prevProfilePrevCombo[source] = prevDown;
+            _prevProfileNextCombo[source] = nextDown;
+
+            if (!prevPressed && !nextPressed) return;
+
+            var now = DateTime.Now;
+            if ((now - _lastProfileSwitch).TotalMilliseconds < ProfileSwitchCooldownMs) return;
+            _lastProfileSwitch = now;
+
+            int delta = nextPressed ? 1 : -1;
+            int targetSrc = source;
+            RunOnUiThread(() => { if (CanUseController(targetSrc)) CycleProfile(delta, targetSrc); });
+        }
 
         private void HandlePauseCombo(bool comboDown, int source)
         {
@@ -106,6 +607,7 @@ namespace ControllerManager
 
             RunOnUiThread(() =>
             {
+                if (!CanUseController(source)) return;
                 _mappingEnabled = !_mappingEnabled;
                 Log.Info($"Raccourcis {(_mappingEnabled ? "réactivés" : "mis en pause")} par combo manette");
                 UpdateMappingToggleMenu();
@@ -120,12 +622,11 @@ namespace ControllerManager
         // --- GESTION MULTIPOINT DU PAVÉ TACTILE (1 DOIGT = SOURIS/CLIC GAUCHE, 2 DOIGTS = SCROLL/CLIC DROIT) ---
         private void ProcessDualSenseMultiTouchpad(bool t1Active, int t1X, int t1Y, bool t2Active, int t2X, int t2Y)
         {
-            var prof = GetActiveProfile();
+            var prof = GetActiveProfileForSource(SourceSony);
 
-            if (prof == null || !prof.touchpadMouseEnabled || !_mappingEnabled)
+            if (prof == null || !prof.touchpadMouseEnabled || !_mappingEnabled || _isDashboardFocused)
             {
-                _prevTouch1 = t1Active;
-                _prevTouch2 = t2Active;
+                ResetSonyTouchpadInput();
                 return;
             }
 
@@ -229,7 +730,7 @@ namespace ControllerManager
                 return;
             }
 
-            var prof = GetActiveProfile();
+            var prof = GetActiveProfileForSource(source);
             if (prof == null) return;
 
             ApplySingleStickAction(prof.leftStick ?? LegacyStick(prof, prof.leftStickMode), lx, ly, StickLeft, source);
@@ -255,12 +756,38 @@ namespace ControllerManager
             }
             for (int stick = 0; stick < 2; stick++)
                 foreach (int d in _stickDirections[source][stick].ReleaseAll())
-                    ReleaseMapping(StickButtonKey(source, stick, d));
+                    ReleaseMapping(source, StickButtonKey(source, stick, d));
+        }
+
+        private void ReleaseSingleStickKeys(int source, int stick, string activeMode)
+        {
+            int keyBase = stick * 8;
+            var states = _stickKeyStates[source];
+            if (activeMode != "wasd")
+            {
+                byte[] scans = { VirtualInput.SCAN_W, VirtualInput.SCAN_S, VirtualInput.SCAN_A, VirtualInput.SCAN_D };
+                for (int k = 0; k < 4; k++)
+                    if (states[keyBase + k])
+                        VirtualInput.SetScanKeyState(scans[k], false, ref states[keyBase + k]);
+            }
+            if (activeMode != "arrows")
+            {
+                byte[] vks = { VirtualInput.VK_UP, VirtualInput.VK_DOWN, VirtualInput.VK_LEFT, VirtualInput.VK_RIGHT };
+                for (int k = 0; k < 4; k++)
+                    if (states[keyBase + 4 + k])
+                        VirtualInput.SetKeyState(vks[k], false, ref states[keyBase + 4 + k]);
+            }
+            if (activeMode != "actions")
+            {
+                foreach (int d in _stickDirections[source][stick].ReleaseAll())
+                    ReleaseMapping(source, StickButtonKey(source, stick, d));
+            }
         }
 
         private void ApplySingleStickAction(StickSettings s, float x, float y, int stick, int source)
         {
-            string mode = s.mode;
+            string mode = s.mode ?? "native";
+            ReleaseSingleStickKeys(source, stick, mode);
             if (string.IsNullOrEmpty(mode) || mode == "native") return;
 
             double dz = s.deadzone >= 0.01 && s.deadzone <= 0.5 ? s.deadzone : 0.08;
@@ -275,9 +802,9 @@ namespace ControllerManager
                 {
                     string key = StickButtonKey(source, stick, direction);
                     if (pressed)
-                        PressMappingAction(key, s.directions.GetValueOrDefault(StickDirectionTracker.Names[direction]));
+                        PressMappingAction(source, key, s.directions.GetValueOrDefault(StickDirectionTracker.Names[direction]));
                     else
-                        ReleaseMapping(key);
+                        ReleaseMapping(source, key);
                 }
                 return;
             }
@@ -369,33 +896,44 @@ namespace ControllerManager
             // Testé AVANT le garde « dashboard au premier plan » : le sélecteur est lui-même une fenêtre de l'appli.
             if (TryRouteToProfileChooser(jsIndex)) return;
 
-            if (!_mappingEnabled || _isDashboardFocused)
-                return;
-
-            var activeProfile = GetActiveProfile();
+            var activeProfile = GetActiveProfileForSource(source);
             if (activeProfile?.buttonMapping == null ||
                 !activeProfile.buttonMapping.TryGetValue(jsIndex.ToString(), out string? raw))
                 return;
 
-            PressMappingAction(ButtonKey(jsIndex, source), raw);
+            // Autoriser le changement de profil ("Profil Suivant" / "Profil Précédent") même quand le Dashboard est au premier plan
+            if (_isDashboardFocused)
+            {
+                int targetSrc = source;
+                if (string.Equals(raw, "Profil Suivant", StringComparison.OrdinalIgnoreCase))
+                    RunOnUiThread(() => CycleProfile(1, targetSrc));
+                else if (string.Equals(raw, "Profil Précédent", StringComparison.OrdinalIgnoreCase))
+                    RunOnUiThread(() => CycleProfile(-1, targetSrc));
+                return;
+            }
+
+            if (!_mappingEnabled)
+                return;
+
+            PressMappingAction(source, ButtonKey(jsIndex, source), raw);
         }
 
         // Commun aux boutons et aux directions de stick : même format d'action, même exécuteur
-        private void PressMappingAction(string buttonKey, string? raw)
+        private void PressMappingAction(int source, string buttonKey, string? raw)
         {
             var action = MappingAction.Parse(raw);
             if (action.Kind == MappingKind.None) return;
 
-            try { _actionRunner.Press(buttonKey, action); }
+            try { _controllerActions[source].Press(buttonKey, action); }
             catch (Exception ex) { Log.Warn($"Action {buttonKey} impossible", ex); }
         }
 
         // Toujours traité, même en pause : une touche « maintenue » ne doit jamais rester bloquée
-        private void ReleaseMapping(int jsIndex, int source) => ReleaseMapping(ButtonKey(jsIndex, source));
+        private void ReleaseMapping(int jsIndex, int source) => ReleaseMapping(source, ButtonKey(jsIndex, source));
 
-        private void ReleaseMapping(string buttonKey)
+        private void ReleaseMapping(int source, string buttonKey)
         {
-            try { _actionRunner.Release(buttonKey); }
+            try { _controllerActions[source].Release(buttonKey); }
             catch (Exception ex) { Log.Warn($"Relâchement {buttonKey} impossible", ex); }
         }
     }

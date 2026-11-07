@@ -11,6 +11,13 @@ Release_Finale/
 .vs/
 .vscode/
 *.user
+*.suo
+TestResults/
+*.trx
+
+# Données locales des profils
+/profiles.json
+/profiles.v1-backup.json
 
 # Sorties de l'installateur et de la CI
 artifacts/

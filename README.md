@@ -37,6 +37,9 @@ Le workflow [`release.yml`](.github/workflows/release.yml) lance les tests, comp
 - **`ControllerManager.csproj`** : Le fichier de projet .NET 8 (WinForms + WebView2 + HidSharp).
 - **`profiles.json`** : Créé automatiquement dans `%APPDATA%\ControllerManager\` (profils par défaut générés au premier lancement).
 - **`build_and_run.bat`** : Script rapide pour lancer ou compiler l'application en un clic.
+- **`scripts/prepare_build.ps1`** : prépare le ZIP portable, les sommes SHA-256 et l'installateur si Inno Setup 6 est disponible.
+
+Les dossiers `bin/`, `obj/`, `Release_Finale/` et `artifacts/` sont générés localement et ignorés par Git. GitHub Actions publie les binaires dans les [Releases](https://github.com/Alkashi1380/ControllerManager/releases).
 
 ## 🚀 Utilisation rapide
 
@@ -59,6 +62,16 @@ Prérequis : [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) inst
    ```bash
    ControllerManager.exe --tray
    ```
+
+### Préparer un ZIP portable en local
+
+Choisissez **4** dans `build_and_run.bat` ou exécutez depuis la racine du dépôt :
+
+```powershell
+powershell -NoProfile -File .\scripts\prepare_build.ps1 -SkipInstaller
+```
+
+Le ZIP et `SHA256SUMS.txt` sont écrits dans `artifacts/installer/`. Le script lit la version depuis `ControllerManager.csproj`, avec la possibilité de la préciser via `-Version x.y.z`. Pour générer aussi l’installateur avec Inno Setup 6, exécutez la commande sans `-SkipInstaller`.
 
 ## ✨ Fonctions principales
 

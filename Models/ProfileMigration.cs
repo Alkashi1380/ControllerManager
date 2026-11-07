@@ -13,6 +13,8 @@ namespace ControllerManager
         {
             p.exe ??= "";
             p.name ??= "Profil";
+            p.shortcutKey ??= "";
+            p.shortcutButtons ??= "";
             p.buttonMapping ??= new Dictionary<string, string>();
             p.color ??= new LightbarColor();
 

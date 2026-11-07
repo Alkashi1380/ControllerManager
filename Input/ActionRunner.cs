@@ -25,6 +25,16 @@ namespace ControllerManager
                     return;
 
                 case MappingKind.Preset:
+                    if (action.Payload == "Profil Suivant")
+                    {
+                        ProfileCycleHandler?.Invoke(1);
+                        return;
+                    }
+                    if (action.Payload == "Profil Précédent")
+                    {
+                        ProfileCycleHandler?.Invoke(-1);
+                        return;
+                    }
                     VirtualInput.ExecuteAction(action.Payload);
                     return;
 
@@ -145,7 +155,9 @@ namespace ControllerManager
                         await Task.Delay(Math.Clamp(step.Ms, 1, MappingAction.MaxDelayMs), ct);
                         continue; // pas de petite pause en plus après une pause explicite
                     case "action":
-                        VirtualInput.ExecuteAction(step.Value);
+                        if (step.Value == "Profil Suivant") ProfileCycleHandler?.Invoke(1);
+                        else if (step.Value == "Profil Précédent") ProfileCycleHandler?.Invoke(-1);
+                        else VirtualInput.ExecuteAction(step.Value);
                         break;
                     case "launch":
                         // Étape de macro : profil choisi automatiquement (profil associé à l'exe, sinon inchangé)
@@ -163,6 +175,9 @@ namespace ControllerManager
         // Fourni par l'appli : choisit le profil manette (éventuellement via une fenêtre) puis lance le programme.
         // rawAction = chaîne d'origine du raccourci, pour y mémoriser le choix ; null pour une étape de macro.
         public Action<LaunchTarget, string?>? LaunchHandler { get; set; }
+
+        // Fourni par l'appli : passe au profil suivant (+1) ou précédent (-1) sur le thread UI
+        public Action<int>? ProfileCycleHandler { get; set; }
 
         private void RequestLaunch(LaunchTarget target, string? rawAction)
         {
