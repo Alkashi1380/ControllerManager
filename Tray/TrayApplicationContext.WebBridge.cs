@@ -142,7 +142,7 @@ namespace ControllerManager
                 }
                 else if (action == "setAutoSwitch")
                 {
-                    _autoSwitchEnabled = OptBool(root, "enabled", _autoSwitchEnabled);
+                    SetAutoSwitchEnabled(OptBool(root, "enabled", _autoSwitchEnabled));
                     RebuildTrayProfilesMenu();
                     SyncStateToWebView();
                 }

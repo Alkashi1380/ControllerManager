@@ -52,7 +52,9 @@ namespace ControllerManager
             (!string.IsNullOrEmpty(name)
                 ? _profiles.FirstOrDefault(p => string.Equals(p.name, name, StringComparison.OrdinalIgnoreCase))
                 : null);
-        private bool _autoSwitchEnabled = false;
+        // Basculement auto selon le jeu : l'interrupteur (menu / dashboard) est mémorisé dans HKCU.
+        // Un choix manuel de profil le coupe seulement jusqu'au prochain démarrage.
+        private bool _autoSwitchEnabled = ReadBoolSetting("AutoSwitch", false);
         private volatile bool _mappingEnabled = true;
         private bool _hudEnabled = false;
         private volatile bool _isDashboardFocused = false;
@@ -128,6 +130,29 @@ namespace ControllerManager
                 return val is int v ? v != 0 : true;
             }
             catch { return true; }
+        }
+
+        private static bool ReadBoolSetting(string name, bool fallback)
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(SettingsRegistryKey, false);
+                return key?.GetValue(name) is int v ? v != 0 : fallback;
+            }
+            catch { return fallback; }
+        }
+
+        // Interrupteur explicite (menu de l'icône ou dashboard) : appliqué et mémorisé
+        private void SetAutoSwitchEnabled(bool enabled)
+        {
+            _autoSwitchEnabled = enabled;
+            try
+            {
+                using var key = Registry.CurrentUser.CreateSubKey(SettingsRegistryKey);
+                key.SetValue("AutoSwitch", enabled ? 1 : 0, RegistryValueKind.DWord);
+            }
+            catch (Exception ex) { Log.Warn("Sauvegarde du basculement automatique impossible", ex); }
+            Log.Info($"Basculement automatique {(enabled ? "activé" : "désactivé")}");
         }
 
         private void SetMultiControllerEnabled(bool enabled)
@@ -522,7 +547,7 @@ namespace ControllerManager
             };
             autoItem.Click += (_, _) =>
             {
-                _autoSwitchEnabled = !_autoSwitchEnabled;
+                SetAutoSwitchEnabled(!_autoSwitchEnabled);
                 RebuildTrayProfilesMenu();
                 SyncStateToWebView();
             };

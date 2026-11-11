@@ -125,7 +125,21 @@ namespace ControllerManager
             }
         }
 
+        // Une seule écriture à la fois : à la fermeture, le rapport « tout éteint » (forceImmediate) attend la fin
+        // d'une écriture en cours, et le thread d'écriture n'envoie plus rien une fois la fermeture lancée.
+        // Sinon une couleur en attente pouvait repartir juste après et laisser barre lumineuse et gâchettes actives.
+        private readonly object _sonyWriteLock = new();
+
         private void WritePendingSonyOutputOnce(bool forceImmediate)
+        {
+            lock (_sonyWriteLock)
+            {
+                if (!forceImmediate && _isShuttingDown) return;
+                WritePendingSonyOutputOnceCore(forceImmediate);
+            }
+        }
+
+        private void WritePendingSonyOutputOnceCore(bool forceImmediate)
         {
             var pending = _pendingSonyOutput;
             if (pending == null) return;
@@ -150,6 +164,7 @@ namespace ControllerManager
                     int waitMs = (int)Math.Ceiling(minIntervalMs - elapsed);
                     if (waitMs > 0 && waitMs <= 200)
                         Thread.Sleep(waitMs);
+                    if (_isShuttingDown) return; // la fermeture a pris le relais pendant l'attente
                     // Relire la dernière requête coalescée après l'attente
                     pending = _pendingSonyOutput ?? pending;
                 }
@@ -478,7 +493,13 @@ namespace ControllerManager
 
                             if (!_activeSonyDevice.TryOpen(out _activeSonyStream))
                             {
+                                // Manette présente mais pas encore ouvrable (pilote Bluetooth pas prêt,
+                                // DS4Windows en accès exclusif…) : on réessaie au prochain créneau de 5 s
+                                // au lieu d'attendre un nouvel événement de branchement.
                                 _activeSonyStream = null;
+                                _activeSonyDevice = null;
+                                _activeSonyPath = "";
+                                _sonyDeviceListDirty = true;
                                 return false;
                             }
                             _lastSentSonyOutput = null;
