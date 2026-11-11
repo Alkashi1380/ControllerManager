@@ -20,18 +20,23 @@ namespace ControllerManager
     {
         public const int ButtonCount = 20;
 
-        public static SonyInputState Parse(byte[] buf, int read, bool isDualSense, bool isBluetooth)
+        public static SonyInputState Parse(byte[]? buf, int read, bool isDualSense, bool isBluetooth)
         {
             var s = new SonyInputState();
+            if (buf == null || read <= 0) return s;
+
+            int len = Math.Min(read, buf.Length);
+            if (len < 8) return s;
 
             if (isDualSense)
             {
                 if (buf[0] == 0x31)
                 {
-                    s.LX = (buf[2] - 128f) / 128f;
-                    s.LY = (buf[3] - 128f) / 128f;
-                    s.RX = (buf[4] - 128f) / 128f;
-                    s.RY = (buf[5] - 128f) / 128f;
+                    if (len < 12) return s;
+                    s.LX = Math.Clamp((buf[2] - 128f) / 128f, -1f, 1f);
+                    s.LY = Math.Clamp((buf[3] - 128f) / 128f, -1f, 1f);
+                    s.RX = Math.Clamp((buf[4] - 128f) / 128f, -1f, 1f);
+                    s.RY = Math.Clamp((buf[5] - 128f) / 128f, -1f, 1f);
                     s.L2 = buf[6] / 255f;
                     s.R2 = buf[7] / 255f;
                     s.B0 = buf[9];
@@ -39,53 +44,55 @@ namespace ControllerManager
                     s.B2 = buf[11];
 
                     // Touchpad DualSense Bluetooth 0x31 : Doigt 1 (34..37), Doigt 2 (38..41)
-                    if (read > 41)
-                        ReadTouch(buf, 34, s);
+                    if (len > 41)
+                        ReadTouch(buf, 34, len, s);
 
                     // Batterie DualSense Bluetooth (octet 54)
-                    if (read > 54)
+                    if (len > 54)
                         ReadBattery(buf[54], s);
                 }
                 else if (isBluetooth && buf[0] == 0x01)
                 {
-                    s.LX = (buf[1] - 128f) / 128f;
-                    s.LY = (buf[2] - 128f) / 128f;
-                    s.RX = (buf[3] - 128f) / 128f;
-                    s.RY = (buf[4] - 128f) / 128f;
+                    s.LX = Math.Clamp((buf[1] - 128f) / 128f, -1f, 1f);
+                    s.LY = Math.Clamp((buf[2] - 128f) / 128f, -1f, 1f);
+                    s.RX = Math.Clamp((buf[3] - 128f) / 128f, -1f, 1f);
+                    s.RY = Math.Clamp((buf[4] - 128f) / 128f, -1f, 1f);
                     s.B0 = buf[5];
                     s.B1 = buf[6];
                     s.B2 = buf[7];
-                    s.L2 = read > 8 ? buf[8] / 255f : ((s.B1 & 0x04) != 0 ? 1f : 0f);
-                    s.R2 = read > 9 ? buf[9] / 255f : ((s.B1 & 0x08) != 0 ? 1f : 0f);
+                    s.L2 = len > 8 ? buf[8] / 255f : ((s.B1 & 0x04) != 0 ? 1f : 0f);
+                    s.R2 = len > 9 ? buf[9] / 255f : ((s.B1 & 0x08) != 0 ? 1f : 0f);
                 }
                 else
                 {
+                    if (len < 11) return s;
                     // DualSense USB 0x01 : Doigt 1 (33..36), Doigt 2 (37..40)
-                    s.LX = (buf[1] - 128f) / 128f;
-                    s.LY = (buf[2] - 128f) / 128f;
-                    s.RX = (buf[3] - 128f) / 128f;
-                    s.RY = (buf[4] - 128f) / 128f;
+                    s.LX = Math.Clamp((buf[1] - 128f) / 128f, -1f, 1f);
+                    s.LY = Math.Clamp((buf[2] - 128f) / 128f, -1f, 1f);
+                    s.RX = Math.Clamp((buf[3] - 128f) / 128f, -1f, 1f);
+                    s.RY = Math.Clamp((buf[4] - 128f) / 128f, -1f, 1f);
                     s.L2 = buf[5] / 255f;
                     s.R2 = buf[6] / 255f;
                     s.B0 = buf[8];
                     s.B1 = buf[9];
                     s.B2 = buf[10];
 
-                    if (read > 40)
-                        ReadTouch(buf, 33, s);
+                    if (len > 40)
+                        ReadTouch(buf, 33, len, s);
 
                     // Batterie DualSense USB (octet 53)
-                    if (read > 53)
+                    if (len > 53)
                         ReadBattery(buf[53], s);
                 }
             }
             else
             {
                 int off = (buf[0] == 0x11) ? 2 : 0;
-                s.LX = (buf[1 + off] - 128f) / 128f;
-                s.LY = (buf[2 + off] - 128f) / 128f;
-                s.RX = (buf[3 + off] - 128f) / 128f;
-                s.RY = (buf[4 + off] - 128f) / 128f;
+                if (len < 10 + off) return s;
+                s.LX = Math.Clamp((buf[1 + off] - 128f) / 128f, -1f, 1f);
+                s.LY = Math.Clamp((buf[2 + off] - 128f) / 128f, -1f, 1f);
+                s.RX = Math.Clamp((buf[3 + off] - 128f) / 128f, -1f, 1f);
+                s.RY = Math.Clamp((buf[4 + off] - 128f) / 128f, -1f, 1f);
                 s.B0 = buf[5 + off];
                 s.B1 = buf[6 + off];
                 s.B2 = buf[7 + off];
@@ -126,22 +133,31 @@ namespace ControllerManager
             return cur;
         }
 
-        private static void ReadTouch(byte[] buf, int o, SonyInputState s)
+        private static void ReadTouch(byte[] buf, int o, int len, SonyInputState s)
         {
+            if (o < 0 || o + 7 >= len) return;
             s.T1Active = (buf[o] & 0x80) == 0;
-            s.T1X = ((buf[o + 2] & 0x0F) << 8) | buf[o + 1];
-            s.T1Y = (buf[o + 3] << 4) | ((buf[o + 2] & 0xF0) >> 4);
+            s.T1X = Math.Clamp(((buf[o + 2] & 0x0F) << 8) | buf[o + 1], 0, 1919);
+            s.T1Y = Math.Clamp((buf[o + 3] << 4) | ((buf[o + 2] & 0xF0) >> 4), 0, 1079);
 
             s.T2Active = (buf[o + 4] & 0x80) == 0;
-            s.T2X = ((buf[o + 6] & 0x0F) << 8) | buf[o + 5];
-            s.T2Y = (buf[o + 7] << 4) | ((buf[o + 6] & 0xF0) >> 4);
+            s.T2X = Math.Clamp(((buf[o + 6] & 0x0F) << 8) | buf[o + 5], 0, 1919);
+            s.T2Y = Math.Clamp((buf[o + 7] << 4) | ((buf[o + 6] & 0xF0) >> 4), 0, 1079);
         }
 
         // Quartet bas : niveau 0..10 (par dizaines), quartet haut : 0 décharge, 1 en charge, 2 plein
         private static void ReadBattery(byte status, SonyInputState s)
         {
+            int powerState = status >> 4;
+            if (powerState == 2)
+            {
+                s.BatteryPercent = 100;
+                return;
+            }
+            if (powerState > 2) return; // État inconnu ou erreur de charge.
+
             s.BatteryPercent = Math.Min(100, (status & 0x0F) * 10 + 5);
-            s.Charging = ((status >> 4) & 0x0F) == 1;
+            s.Charging = powerState == 1;
         }
     }
 }

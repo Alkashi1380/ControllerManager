@@ -68,6 +68,50 @@ namespace ControllerManager.Tests
             Assert.True(charging.Charging);
         }
 
+        [Theory]
+        [InlineData(0x01, 15, false)]
+        [InlineData(0x11, 15, true)]
+        [InlineData(0x21, 100, false)]
+        [InlineData(0xA0, null, false)]
+        [InlineData(0xF0, null, false)]
+        public void BatteryStatus_DistinguishesLowFullAndInvalidReadings(int status, int? percent, bool charging)
+        {
+            var frame = Hex(FrameBatteryHex);
+            frame[54] = (byte)status;
+            var state = SonyReportParser.Parse(frame, frame.Length, isDualSense: true, isBluetooth: true);
+            Assert.Equal(percent, state.BatteryPercent);
+            Assert.Equal(charging, state.Charging);
+        }
+
+        [Fact]
+        public void DualSenseBluetoothOutput_UsesSequenceTagPayloadAndCrc()
+        {
+            var payload = new byte[DualSenseOutputReport.PayloadLength];
+            payload[1] = 0x04;
+            payload[44] = 255;
+
+            var bluetooth = DualSenseOutputReport.Encode(payload, bluetooth: true, sequence: 31);
+            Assert.Equal(78, bluetooth.Length);
+            Assert.Equal(new byte[] { 0x31, 0xF0, 0x10, 0x00, 0x04 }, bluetooth[..5]);
+            Assert.Equal(new byte[] { 255, 0, 0 }, bluetooth[47..50]);
+            Assert.Equal(new byte[] { 0x01, 0x10, 0x61, 0xAB }, bluetooth[74..]);
+
+            var usb = DualSenseOutputReport.Encode(payload, bluetooth: false);
+            Assert.Equal(48, usb.Length);
+            Assert.Equal(0x02, usb[0]);
+            Assert.Equal(payload, usb[1..]);
+        }
+
+        [Fact]
+        public void DualSenseBluetoothLightbarReset_SetsSetupFlagAndCrc()
+        {
+            var reset = DualSenseOutputReport.ResetBluetoothLightbar(0);
+            Assert.Equal(new byte[] { 0x31, 0x00, 0x10 }, reset[..3]);
+            Assert.Equal(0x02, reset[41]);
+            Assert.Equal(0x02, reset[44]);
+            Assert.Equal(new byte[] { 0x43, 0xE6, 0x31, 0x36 }, reset[74..]);
+        }
+
         [Fact]
         public void UsbFrame_DecodesButtonsTouchAndBatteryAtUsbOffsets()
         {
@@ -137,6 +181,25 @@ namespace ControllerManager.Tests
             var b = SonyReportParser.DecodeButtons(s, false);
             Assert.True(b[1]);
             Assert.True(b[6]);
+        }
+
+        [Fact]
+        public void NullOrTruncatedFrames_DoNotThrowAndReturnSafeState()
+        {
+            var fromNull = SonyReportParser.Parse(null, 64, isDualSense: true, isBluetooth: false);
+            Assert.Equal(0f, fromNull.LX);
+            Assert.False(fromNull.T1Active);
+
+            // Trame DualSense Bluetooth 0x31 tronquée à 9 octets (moins que les 12 requis)
+            var shortBt = new byte[] { 0x31, 0x02, 0x80, 0x80, 0x80, 0x80, 0x00, 0x00, 0x00 };
+            var sBt = SonyReportParser.Parse(shortBt, shortBt.Length, isDualSense: true, isBluetooth: true);
+            Assert.Equal(0f, sBt.LX);
+
+            // Trame DS4 Bluetooth 0x11 tronquée à 10 octets (moins que 10 + offset 2 = 12 requis)
+            var shortDs4 = new byte[10];
+            shortDs4[0] = 0x11;
+            var sDs4 = SonyReportParser.Parse(shortDs4, shortDs4.Length, isDualSense: false, isBluetooth: true);
+            Assert.Equal(0f, sDs4.LX);
         }
     }
 }

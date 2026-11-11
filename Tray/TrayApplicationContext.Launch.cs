@@ -11,10 +11,15 @@ namespace ControllerManager
         private volatile ProfileChooserForm? _profileChooser;
 
         // Appelé depuis le thread d'entrées ou une macro : tout ce qui touche aux profils et fenêtres passe par le thread UI
-        private void HandleLaunchRequest(LaunchTarget target, string? rawAction)
+        private void HandleLaunchRequest(LaunchTarget target, string? rawAction) =>
+            HandleLaunchRequest(target, rawAction, source: null);
+
+        private void HandleLaunchRequest(LaunchTarget target, string? rawAction, int? source)
         {
             RunOnUiThread(() =>
             {
+                if (source.HasValue && !CanUseController(source.Value)) return;
+                int targetSource = source ?? SelectedControllerSource;
                 string? exeName = LaunchProfileResolver.ExeNameOf(target.Path);
                 string appName = exeName ?? Path.GetFileName(target.Path.Trim().Trim('"'));
                 var resolution = LaunchProfileResolver.Resolve(target.ProfileId, exeName, _profiles);
@@ -22,7 +27,7 @@ namespace ControllerManager
                 if (resolution.Outcome != LaunchProfileResolver.Outcome.Ask)
                 {
                     Log.Info($"Lancement de {appName} : {resolution.Reason}");
-                    LaunchWithProfile(target, exeName, resolution.ProfileId);
+                    LaunchWithProfile(target, exeName, resolution.ProfileId, targetSource);
                     return;
                 }
 
@@ -34,7 +39,7 @@ namespace ControllerManager
 
                 // Présélection = ce que donnerait le mode automatique (profil associé à l'exe)
                 string? preselected = LaunchProfileResolver.FindByExe(exeName, _profiles)?.id;
-                string profileOwnerId = _currentProfileId; // le raccourci appartient au profil actif au moment de l'appui
+                string profileOwnerId = GetActiveProfileForSource(targetSource)?.id ?? "";
 
                 _profileChooser = new ProfileChooserForm(appName, _profiles, preselected, choice =>
                 {
@@ -48,18 +53,18 @@ namespace ControllerManager
                         RememberLaunchProfile(profileOwnerId, rawAction, choice.ProfileId ?? LaunchProfileResolver.Keep);
 
                     Log.Info($"Lancement de {appName} : profil choisi {(choice.ProfileId == null ? "(inchangé)" : choice.ProfileId)}");
-                    LaunchWithProfile(target, exeName, choice.ProfileId);
+                    LaunchWithProfile(target, exeName, choice.ProfileId, targetSource);
                 });
                 _profileChooser.Show();
             });
         }
 
         // Le profil est appliqué avant le lancement : l'appli démarre directement avec les bons réglages
-        private void LaunchWithProfile(LaunchTarget target, string? exeName, string? profileId)
+        private void LaunchWithProfile(LaunchTarget target, string? exeName, string? profileId, int source)
         {
             if (profileId != null && _profiles.Any(p => p.id == profileId))
             {
-                ApplyProfile(profileId, notifyUser: true);
+                ApplyProfile(profileId, notifyUser: true, targetSource: source);
                 if (exeName != null) _launchProfileOverrides[exeName] = profileId;
             }
             Task.Run(() => ActionRunner.LaunchProgram(target.Path, target.Args));

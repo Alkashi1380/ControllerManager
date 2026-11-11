@@ -4,26 +4,101 @@ namespace ControllerManager
 {
     public partial class TrayApplicationContext
     {
-        private void ApplyProfile(string profileId, bool notifyUser)
+        private void CycleProfile(int delta, int? targetSource = null)
+        {
+            if (_profiles == null || _profiles.Count == 0) return;
+
+            int effectiveSource = targetSource ?? SelectedControllerSource;
+            string activeId = effectiveSource == SourceXbox ? _currentXboxProfileId : _currentProfileId;
+
+            int curIdx = _profiles.FindIndex(p => p.id == activeId);
+            if (curIdx < 0) curIdx = 0;
+
+            int nextIdx = ((curIdx + delta) % _profiles.Count + _profiles.Count) % _profiles.Count;
+            var target = _profiles[nextIdx];
+
+            _autoSwitchEnabled = false; // Verrouille sur le profil choisi manuellement par raccourci
+            ApplyProfile(target.id, notifyUser: true, targetSource: effectiveSource);
+        }
+
+        private static string DescribeTriggerMode(string? mode) => mode switch
+        {
+            "continuous" => "Rigide",
+            "section" => "Tir Pistolet",
+            "vibration" => "Pulsation",
+            _ => "Souple"
+        };
+
+        private System.Windows.Forms.Timer? _profileBalloonTimer;
+        private GamepadProfile? _pendingBalloonProfile;
+        private bool _pendingBalloonNotify;
+        private bool _pendingSonyHardwareUpdate;
+
+        private void ApplyProfile(string profileId, bool notifyUser, int? targetSource = null)
         {
             var matched = _profiles.FirstOrDefault(p => p.id == profileId);
             if (matched == null) return;
 
-            bool changed = _currentProfileId != matched.id;
-            if (changed) _actionRunner.ReleaseAll(); // les touches maintenues du profil précédent ne doivent pas survivre
-            _currentProfileId = matched.id;
-
-            ApplyActiveProfileHardwareEffects();
+            bool changed;
+            lock (_inputStateLock)
+            {
+                int source = targetSource ?? SelectedControllerSource;
+                if (source == SourceXbox)
+                {
+                    changed = _currentXboxProfileId != matched.id;
+                    if (changed) ReleaseControllerOutputs(SourceXbox);
+                    _currentXboxProfileId = matched.id;
+                }
+                else
+                {
+                    changed = _currentProfileId != matched.id;
+                    if (changed) ReleaseControllerOutputs(SourceSony);
+                    _currentProfileId = matched.id;
+                    _pendingSonyHardwareUpdate = true;
+                }
+            }
 
             RebuildTrayProfilesMenu();
             RefreshHudOverlayContent();
-            _trayIcon.Text = $"Gamepad Manager - {ActiveProfileName}";
+            UpdateTrayTooltipText();
 
+            _pendingBalloonProfile = matched;
             if (notifyUser && changed)
+                _pendingBalloonNotify = true;
+
+            if (_profileBalloonTimer == null)
             {
-                _trayIcon.ShowBalloonTip(1500, "Profil Manette Activé",
-                    $"Profil actif : {matched.name}", ToolTipIcon.Info);
+                _profileBalloonTimer = new System.Windows.Forms.Timer { Interval = 260 };
+                _profileBalloonTimer.Tick += (_, _) =>
+                {
+                    _profileBalloonTimer.Stop();
+                    if (_isShuttingDown) return;
+
+                    if (_pendingSonyHardwareUpdate)
+                    {
+                        _pendingSonyHardwareUpdate = false;
+                        ApplyActiveProfileHardwareEffects();
+                    }
+
+                    var p = _pendingBalloonProfile;
+                    bool shouldNotify = _pendingBalloonNotify;
+                    _pendingBalloonNotify = false;
+
+                    if (shouldNotify && p != null)
+                    {
+                        string l2Desc = DescribeTriggerMode(p.l2TriggerMode);
+                        string r2Desc = DescribeTriggerMode(p.r2TriggerMode);
+                        try
+                        {
+                            _trayIcon.ShowBalloonTip(1200, "🎮 Profil Manette Activé",
+                                $"{p.name}\nGâchettes L2/R2 : {l2Desc} / {r2Desc}", ToolTipIcon.Info);
+                        }
+                        catch { }
+                    }
+                };
             }
+            _profileBalloonTimer.Stop();
+            _profileBalloonTimer.Start();
 
             SyncStateToWebView();
         }
@@ -160,7 +235,10 @@ namespace ControllerManager
             try
             {
                 Directory.CreateDirectory(AppDataDir);
-                File.WriteAllText(ProfilesFilePath, JsonSerializer.Serialize(_profiles));
+                string tmpPath = ProfilesFilePath + ".tmp";
+                string json = JsonSerializer.Serialize(_profiles, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(tmpPath, json);
+                File.Move(tmpPath, ProfilesFilePath, overwrite: true);
             }
             catch (Exception ex) { Log.Error("Sauvegarde de profiles.json impossible", ex); }
         }

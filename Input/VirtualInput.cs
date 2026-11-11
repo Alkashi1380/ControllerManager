@@ -65,10 +65,7 @@ namespace ControllerManager
 
         public static void SetKeyState(byte vk, bool down, ref bool prevDown)
         {
-            if (down && !prevDown)
-                keybd_event(vk, 0, 0, 0);
-            else if (!down && prevDown)
-                keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+            if (down != prevDown) SetHeldKey(vk, 0, down);
             prevDown = down;
         }
 
@@ -82,18 +79,47 @@ namespace ControllerManager
         // Comme SetKeyState mais par position physique : indépendant de la disposition du clavier
         public static void SetScanKeyState(byte scanCode, bool down, ref bool prevDown)
         {
-            if (down && !prevDown)
-                keybd_event(0, scanCode, KEYEVENTF_SCANCODE, 0);
-            else if (!down && prevDown)
-                keybd_event(0, scanCode, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0);
+            if (down != prevDown) SetHeldKey(0, scanCode, down);
             prevDown = down;
+        }
+
+        // Plusieurs actions peuvent maintenir la même touche. Seul le dernier relâchement envoie KEYUP.
+        private static readonly Dictionary<(byte Vk, byte Scan), int> HeldKeys = new();
+
+        private static void SetHeldKey(byte vk, byte scan, bool down)
+        {
+            lock (HeldKeys)
+            {
+                var key = (vk, scan);
+                int count = HeldKeys.GetValueOrDefault(key);
+                uint flags = scan == 0 ? KeyFlags(vk) : KEYEVENTF_SCANCODE;
+                if (down)
+                {
+                    if (count == 0) keybd_event(vk, scan, flags, 0);
+                    HeldKeys[key] = count + 1;
+                }
+                else if (count == 1)
+                {
+                    keybd_event(vk, scan, flags | KEYEVENTF_KEYUP, 0);
+                    HeldKeys.Remove(key);
+                }
+                else if (count > 1)
+                {
+                    HeldKeys[key] = count - 1;
+                }
+            }
         }
 
         // Appui + relâchement : sans KEYUP, Windows garde la touche « enfoncée » dans son état clavier
         public static void TapKey(byte vk)
         {
-            keybd_event(vk, 0, 0, 0);
-            keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+            lock (HeldKeys)
+            {
+                uint flags = KeyFlags(vk);
+                keybd_event(vk, 0, flags, 0);
+                if (!HeldKeys.ContainsKey((vk, 0)))
+                    keybd_event(vk, 0, flags | KEYEVENTF_KEYUP, 0);
+            }
         }
 
         public const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
@@ -172,28 +198,28 @@ namespace ControllerManager
         public static void PressKeyCombo(KeyCombo combo)
         {
             foreach (var mod in combo.Modifiers)
-                keybd_event(mod, 0, KeyFlags(mod), 0);
-            keybd_event(combo.Key, 0, KeyFlags(combo.Key), 0);
+                SetHeldKey(mod, 0, true);
+            SetHeldKey(combo.Key, 0, true);
         }
 
         public static void ReleaseKeyCombo(KeyCombo combo)
         {
-            keybd_event(combo.Key, 0, KeyFlags(combo.Key) | KEYEVENTF_KEYUP, 0);
+            SetHeldKey(combo.Key, 0, false);
             for (int i = combo.Modifiers.Count - 1; i >= 0; i--)
-                keybd_event(combo.Modifiers[i], 0, KeyFlags(combo.Modifiers[i]) | KEYEVENTF_KEYUP, 0);
+                SetHeldKey(combo.Modifiers[i], 0, false);
         }
 
         // Modificateurs enfoncés dans l'ordre, touche tapée, puis modificateurs relâchés dans l'ordre inverse
         public static void SendKeyCombo(KeyCombo combo)
         {
-            foreach (var mod in combo.Modifiers)
-                keybd_event(mod, 0, KeyFlags(mod), 0);
-
-            keybd_event(combo.Key, 0, KeyFlags(combo.Key), 0);
-            keybd_event(combo.Key, 0, KeyFlags(combo.Key) | KEYEVENTF_KEYUP, 0);
-
-            for (int i = combo.Modifiers.Count - 1; i >= 0; i--)
-                keybd_event(combo.Modifiers[i], 0, KeyFlags(combo.Modifiers[i]) | KEYEVENTF_KEYUP, 0);
+            lock (HeldKeys)
+            {
+                foreach (var mod in combo.Modifiers)
+                    SetHeldKey(mod, 0, true);
+                TapKey(combo.Key);
+                for (int i = combo.Modifiers.Count - 1; i >= 0; i--)
+                    SetHeldKey(combo.Modifiers[i], 0, false);
+            }
         }
 
         private static uint KeyFlags(byte vk) => KeyCombo.IsExtended(vk) ? KEYEVENTF_EXTENDEDKEY : 0;
@@ -215,22 +241,10 @@ namespace ControllerManager
                 case "Play / Pause": TapKey(VK_MEDIA_PLAY_PAUSE); break;
                 case "Piste Suivante": TapKey(VK_MEDIA_NEXT_TRACK); break;
                 case "Piste Précédente": TapKey(VK_MEDIA_PREV_TRACK); break;
-                case "Touche Espace (Saut)":
-                    keybd_event(VK_SPACE, 0, 0, 0);
-                    keybd_event(VK_SPACE, 0, KEYEVENTF_KEYUP, 0);
-                    break;
-                case "Touche Entrée":
-                    keybd_event(VK_RETURN, 0, 0, 0);
-                    keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0);
-                    break;
-                case "Echap":
-                    keybd_event(VK_ESCAPE, 0, 0, 0);
-                    keybd_event(VK_ESCAPE, 0, KEYEVENTF_KEYUP, 0);
-                    break;
-                case "Plein Écran (F11)":
-                    keybd_event(VK_F11, 0, 0, 0);
-                    keybd_event(VK_F11, 0, KEYEVENTF_KEYUP, 0);
-                    break;
+                case "Touche Espace (Saut)": TapKey(VK_SPACE); break;
+                case "Touche Entrée": TapKey(VK_RETURN); break;
+                case "Echap": TapKey(VK_ESCAPE); break;
+                case "Plein Écran (F11)": TapKey(VK_F11); break;
                 case "Clic Gauche Souris":
                     LeftClick();
                     break;
@@ -240,21 +254,12 @@ namespace ControllerManager
                 case "Clic Molette (Milieu)":
                     mouse_event(MOUSEEVENTF_MIDDLEDOWN | MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0);
                     break;
-                case "Capture d'écran (Impr. Écran)":
-                    keybd_event(VK_SNAPSHOT, 0, 0, 0);
-                    keybd_event(VK_SNAPSHOT, 0, KEYEVENTF_KEYUP, 0);
-                    break;
+                case "Capture d'écran (Impr. Écran)": TapKey(VK_SNAPSHOT); break;
                 case "Afficher le Bureau (Win + D)":
-                    keybd_event(VK_LWIN, 0, 0, 0);
-                    keybd_event(VK_D, 0, 0, 0);
-                    keybd_event(VK_D, 0, KEYEVENTF_KEYUP, 0);
-                    keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0);
+                    SendKeyCombo(new KeyCombo(new[] { VK_LWIN }, VK_D));
                     break;
                 case "Alt + Tab":
-                    keybd_event(VK_MENU, 0, 0, 0);
-                    keybd_event(VK_TAB, 0, 0, 0);
-                    keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0);
-                    keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
+                    SendKeyCombo(new KeyCombo(new[] { VK_MENU }, VK_TAB));
                     break;
             }
         }

@@ -41,6 +41,27 @@ namespace ControllerManager
         [DllImport("xinput1_4.dll")]
         public static extern uint XInputGetState(uint dwUserIndex, out XINPUT_STATE pState);
 
+        [DllImport("kernel32.dll", ExactSpelling = true)]
+        private static extern IntPtr GetProcAddress(IntPtr module, IntPtr ordinal);
+
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate uint GetStateDelegate(uint userIndex, out XINPUT_STATE state);
+
+        private static readonly GetStateDelegate ReadState = LoadGetState();
+
+        private static GetStateDelegate LoadGetState()
+        {
+            // L'export standard masque Guide. L'ordinal 100 conserve le même ABI et expose son bit.
+            if (NativeLibrary.TryLoad("xinput1_4.dll", typeof(XInput).Assembly, DllImportSearchPath.System32, out var module))
+            {
+                var address = GetProcAddress(module, new IntPtr(100));
+                if (address != IntPtr.Zero)
+                    return Marshal.GetDelegateForFunctionPointer<GetStateDelegate>(address);
+                NativeLibrary.Free(module);
+            }
+            return XInputGetState;
+        }
+
         [DllImport("xinput1_4.dll")]
         public static extern uint XInputSetState(uint dwUserIndex, ref XINPUT_VIBRATION pVibration);
 
@@ -59,6 +80,7 @@ namespace ControllerManager
         public const ushort RIGHT_THUMB = 0x0080;
         public const ushort LEFT_SHOULDER = 0x0100;
         public const ushort RIGHT_SHOULDER = 0x0200;
+        public const ushort GUIDE = 0x0400;
         public const ushort A = 0x1000;
         public const ushort B = 0x2000;
         public const ushort X = 0x4000;
@@ -66,6 +88,9 @@ namespace ControllerManager
 
         public const byte BATTERY_TYPE_DISCONNECTED = 0x00;
         public const byte BATTERY_TYPE_WIRED = 0x01;
+
+        public static uint GetState(uint dwUserIndex, out XINPUT_STATE pState) =>
+            ReadState(dwUserIndex, out pState);
 
         public static bool IsConnected(int slot) =>
             slot >= 0 && slot < 4 && XInputGetState((uint)slot, out _) == ERROR_SUCCESS;

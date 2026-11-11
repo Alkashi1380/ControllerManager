@@ -15,7 +15,7 @@ namespace ControllerManager
             {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
-                string action = root.GetProperty("action").GetString() ?? "";
+                string action = OptString(root, "action") ?? "";
 
                 if (action == "requestInitState")
                 {
@@ -24,20 +24,27 @@ namespace ControllerManager
                 }
                 else if (action == "setMappingEnabled")
                 {
-                    _mappingEnabled = root.GetProperty("enabled").GetBoolean();
+                    _mappingEnabled = OptBool(root, "enabled", _mappingEnabled);
                     UpdateMappingToggleMenu();
                     SyncStateToWebView();
                 }
                 else if (action == "setHudOverlay")
                 {
-                    bool en = root.GetProperty("enabled").GetBoolean();
+                    bool en = OptBool(root, "enabled", _hudEnabled);
                     ToggleHudOverlay(en);
                 }
                 else if (action == "setWindowsStartup")
                 {
-                    bool en = root.GetProperty("enabled").GetBoolean();
+                    bool en = OptBool(root, "enabled", IsStartupEnabled());
                     SetStartupEnabled(en);
                     _startupToggleMenuItem.Checked = IsStartupEnabled();
+                    SyncStateToWebView();
+                }
+                else if (action == "setMultiController")
+                {
+                    bool en = OptBool(root, "enabled", _multiControllerEnabled);
+                    SetMultiControllerEnabled(en);
+                    if (_multiControllerMenuItem != null) _multiControllerMenuItem.Checked = _multiControllerEnabled;
                     SyncStateToWebView();
                 }
                 else if (action == "refreshHardwareInventory")
@@ -48,21 +55,24 @@ namespace ControllerManager
                 {
                     ResetHidAndWakeSony();
                 }
+                else if (action == "repairXboxDisconnect")
+                {
+                    RepairXboxWirelessDisconnect();
+                }
                 else if (action == "resetTriggersDefault")
                 {
                     ResetTriggersToDefault();
                 }
                 else if (action == "killConflicts")
                 {
-                    bool includeSteam = root.TryGetProperty("includeSteam", out var sProp) && sProp.GetBoolean();
+                    bool includeSteam = OptBool(root, "includeSteam", false);
                     KillConflictingApps(includeSteam);
                 }
                 else if (action == "testMappingAction")
                 {
                     // Bouton « Tester » de l'éditeur : délai pour laisser l'utilisateur cliquer dans l'appli cible
                     var testAction = MappingAction.Parse(OptString(root, "value"));
-                    int delayMs = root.TryGetProperty("delayMs", out var d) && d.ValueKind == JsonValueKind.Number
-                        ? Math.Clamp(d.GetInt32(), 0, 10_000) : 3000;
+                    int delayMs = Math.Clamp(OptInt32(root, "delayMs", 3000), 0, 10_000);
                     if (testAction.Kind != MappingKind.None)
                     {
                         Log.Info($"Test d'action demandé : {testAction.Kind}");
@@ -90,34 +100,40 @@ namespace ControllerManager
                 else if (action == "openWinTool")
                 {
                     // Liste blanche : la page ne doit jamais pouvoir lancer un programme arbitraire
-                    string tool = root.GetProperty("tool").GetString() ?? "";
+                    string tool = OptString(root, "tool") ?? "";
                     if (AllowedWindowsTools.Contains(tool))
                         OpenWindowsTool(tool);
                 }
                 else if (action == "selectController")
                 {
-                    _selectedWebGpIndex = root.GetProperty("index").GetInt32();
-                    _selectedControllerType = root.GetProperty("controllerType").GetString() ?? "PS5";
-                    _lastBatteryCheck = DateTime.MinValue;
+                    int index = OptInt32(root, "index", 99);
+                    SetControllerSelection(index, OptString(root, "controllerType") ?? (index == 99 ? "PS5" : "XBOX"));
+                    UpdateBatteryIndicators();
                     RebuildTrayControllersMenu();
+                    RebuildTrayProfilesMenu();
                     RefreshHudOverlayContent();
+                    UpdateTrayTooltipText();
+                    SyncStateToWebView();
                 }
                 else if (action == "updateControllerList")
                 {
-                    string rawList = root.GetProperty("controllers").GetRawText();
-                    _connectedControllers = JsonSerializer.Deserialize<List<ControllerSlotInfo>>(rawList) ?? new();
+                    if (root.TryGetProperty("controllers", out var ctrlProp) && ctrlProp.ValueKind == JsonValueKind.Array)
+                    {
+                        string rawList = ctrlProp.GetRawText();
+                        _connectedControllers = JsonSerializer.Deserialize<List<ControllerSlotInfo>>(rawList) ?? new();
+                    }
                     if (root.TryGetProperty("activeIndex", out var actIdx) && actIdx.ValueKind == JsonValueKind.Number)
                     {
-                        _selectedWebGpIndex = actIdx.GetInt32();
-                        var cur = _connectedControllers.FirstOrDefault(c => c.index == _selectedWebGpIndex);
-                        if (cur != null) _selectedControllerType = cur.type;
+                        int index = actIdx.GetInt32();
+                        var cur = _connectedControllers.FirstOrDefault(c => c.index == index);
+                        SetControllerSelection(index, cur?.type ?? _selectedControllerType);
                     }
                     RebuildTrayControllersMenu();
                 }
                 else if (action == "selectProfile")
                 {
                     var target = FindProfile(OptString(root, "profileId"), OptString(root, "profileName"));
-                    if (root.TryGetProperty("autoSwitch", out var autoProp))
+                    if (root.TryGetProperty("autoSwitch", out var autoProp) && (autoProp.ValueKind == JsonValueKind.True || autoProp.ValueKind == JsonValueKind.False))
                     {
                         _autoSwitchEnabled = autoProp.GetBoolean();
                     }
@@ -126,48 +142,73 @@ namespace ControllerManager
                 }
                 else if (action == "setAutoSwitch")
                 {
-                    _autoSwitchEnabled = root.GetProperty("enabled").GetBoolean();
+                    _autoSwitchEnabled = OptBool(root, "enabled", _autoSwitchEnabled);
                     RebuildTrayProfilesMenu();
                     SyncStateToWebView();
                 }
+                else if (action == "cycleProfile")
+                {
+                    int delta = OptInt32(root, "delta", 1);
+                    CycleProfile(delta >= 0 ? 1 : -1);
+                }
                 else if (action == "syncProfiles")
                 {
-                    // Un réglage modifié (mode de stick, raccourci…) ne doit pas laisser une touche enfoncée
-                    _actionRunner.ReleaseAll();
-                    string rawProfiles = root.GetProperty("profiles").GetRawText();
-                    Directory.CreateDirectory(AppDataDir);
-                    File.WriteAllText(ProfilesFilePath, rawProfiles);
-                    LoadProfilesFromDisk();
-                    // Réécrit le fichier pour y figer les id générés pendant le chargement
-                    SaveProfilesToDisk();
+                    // Garde d'intégrité : on valide d'abord la liste en mémoire avant d'écrire sur le disque
+                    if (!root.TryGetProperty("profiles", out var profProp) || profProp.ValueKind != JsonValueKind.Array)
+                        return;
 
-                    var requested = FindProfile(OptString(root, "activeProfileId"), OptString(root, "activeProfileName"));
-                    _currentProfileId = requested?.id ?? GetActiveProfile()?.id ?? _profiles.FirstOrDefault()?.id ?? "";
+                    string rawProfiles = profProp.GetRawText();
+                    var validated = JsonSerializer.Deserialize<List<GamepadProfile>>(rawProfiles);
+                    if (validated == null || validated.Count == 0)
+                        return;
+
+                    foreach (var p in validated)
+                        ProfileMigration.Migrate(p);
+                    EnsureProfileIds(validated);
+
+                    lock (_inputStateLock)
+                    {
+                        // Les raccourcis et sticks peuvent changer dans chacun des profils édités.
+                        ReleaseAllControllerOutputs();
+                        _profiles = validated;
+
+                        var requested = FindProfile(OptString(root, "activeProfileId"), OptString(root, "activeProfileName"));
+                        string resolvedId = requested?.id ?? GetActiveProfile()?.id ?? validated[0].id;
+                        if (SelectedControllerSource == SourceXbox || !validated.Any(p => p.id == _currentXboxProfileId))
+                            _currentXboxProfileId = resolvedId;
+                        if (SelectedControllerSource == SourceSony || !validated.Any(p => p.id == _currentProfileId))
+                            _currentProfileId = resolvedId;
+                    }
+                    SaveProfilesToDisk();
 
                     ApplyActiveProfileHardwareEffects();
                     RebuildTrayProfilesMenu();
                     RefreshHudOverlayContent();
+                    UpdateTrayTooltipText();
                     SyncStateToWebView();
                 }
                 else if (action == "applyDualSenseTriggers")
                 {
-                    string l2M = root.GetProperty("l2Mode").GetString() ?? "off";
-                    int l2F = root.GetProperty("l2Force").GetInt32();
-                    string r2M = root.GetProperty("r2Mode").GetString() ?? "off";
-                    int r2F = root.GetProperty("r2Force").GetInt32();
-                    var c = root.GetProperty("color");
-
-                    SendDualSenseOutputReport(
-                        (byte)c.GetProperty("r").GetInt32(),
-                        (byte)c.GetProperty("g").GetInt32(),
-                        (byte)c.GetProperty("b").GetInt32(),
-                        l2M, l2F, r2M, r2F
-                    );
+                    string l2M = OptString(root, "l2Mode") ?? "off";
+                    int l2F = Math.Clamp(OptInt32(root, "l2Force", 180), 0, 255);
+                    string r2M = OptString(root, "r2Mode") ?? "off";
+                    int r2F = Math.Clamp(OptInt32(root, "r2Force", 180), 0, 255);
+                    var prof = GetActiveProfile();
+                    if (prof != null)
+                    {
+                        prof.l2TriggerMode = l2M;
+                        prof.l2TriggerForce = l2F;
+                        prof.r2TriggerMode = r2M;
+                        prof.r2TriggerForce = r2F;
+                        SaveProfilesToDisk();
+                    }
+                    var (r, g, b) = OptColor(root, prof?.color);
+                    SendDualSenseOutputReport(r, g, b, l2M, l2F, r2M, r2F);
                 }
                 else if (action == "testRumble")
                 {
-                    double left = root.GetProperty("left").GetDouble();
-                    double right = root.GetProperty("right").GetDouble();
+                    double left = Math.Clamp(OptDouble(root, "left", 0), 0, 1);
+                    double right = Math.Clamp(OptDouble(root, "right", 0), 0, 1);
 
                     XInput.SetVibration(XInput.FindSlot(_selectedWebGpIndex), left, right);
 
@@ -182,15 +223,35 @@ namespace ControllerManager
                 }
                 else if (action == "updateLightbar")
                 {
-                    var c = root.GetProperty("color");
                     var prof = GetActiveProfile();
+                    var (r, g, b) = OptColor(root, prof?.color);
                     SendDualSenseOutputReport(
-                        (byte)c.GetProperty("r").GetInt32(),
-                        (byte)c.GetProperty("g").GetInt32(),
-                        (byte)c.GetProperty("b").GetInt32(),
+                        r, g, b,
                         prof?.l2TriggerMode ?? "off", prof?.l2TriggerForce ?? 180,
                         prof?.r2TriggerMode ?? "off", prof?.r2TriggerForce ?? 180
                     );
+                }
+                else if (action == "setCapturingShortcut")
+                {
+                    _isCapturingShortcutInUi = OptBool(root, "capturing", false);
+                }
+                else if (action == "webGamepadInput")
+                {
+                    if (_lastXInputSlot < 0 && root.TryGetProperty("buttons", out var bProp) && bProp.ValueKind == JsonValueKind.Array)
+                    {
+                        var arr = new bool[20];
+                        int idx = 0;
+                        foreach (var el in bProp.EnumerateArray())
+                        {
+                            if (idx >= 20) break;
+                            arr[idx++] = el.ValueKind == JsonValueKind.True;
+                        }
+                        float lx = (float)OptDouble(root, "lx", 0);
+                        float ly = (float)OptDouble(root, "ly", 0);
+                        float rx = (float)OptDouble(root, "rx", 0);
+                        float ry = (float)OptDouble(root, "ry", 0);
+                        PollWebGamepadState(arr, lx, ly, rx, ry);
+                    }
                 }
             }
             catch (Exception ex) { Log.Error("Message de l'interface non traité", ex); }
@@ -199,20 +260,51 @@ namespace ControllerManager
         private static string? OptString(JsonElement root, string property) =>
             root.TryGetProperty(property, out var prop) && prop.ValueKind == JsonValueKind.String ? prop.GetString() : null;
 
+        private static bool OptBool(JsonElement root, string property, bool fallback) =>
+            root.TryGetProperty(property, out var prop) && (prop.ValueKind == JsonValueKind.True || prop.ValueKind == JsonValueKind.False)
+                ? prop.GetBoolean()
+                : fallback;
+
+        private static int OptInt32(JsonElement root, string property, int fallback) =>
+            root.TryGetProperty(property, out var prop) && prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out int val)
+                ? val
+                : fallback;
+
+        private static double OptDouble(JsonElement root, string property, double fallback) =>
+            root.TryGetProperty(property, out var prop) && prop.ValueKind == JsonValueKind.Number && prop.TryGetDouble(out double val)
+                ? val
+                : fallback;
+
+        private static (byte r, byte g, byte b) OptColor(JsonElement root, LightbarColor? fallback)
+        {
+            var fb = fallback ?? new LightbarColor { r = 0, g = 102, b = 255 };
+            if (!root.TryGetProperty("color", out var c) || c.ValueKind != JsonValueKind.Object)
+                return (fb.r, fb.g, fb.b);
+            byte r = (byte)Math.Clamp(OptInt32(c, "r", fb.r), 0, 255);
+            byte g = (byte)Math.Clamp(OptInt32(c, "g", fb.g), 0, 255);
+            byte b = (byte)Math.Clamp(OptInt32(c, "b", fb.b), 0, 255);
+            return (r, g, b);
+        }
+
         private void SyncStateToWebView()
         {
+            var activeProf = GetActiveProfile();
             SendToWebView(new
             {
                 type = "initState",
                 profiles = _profiles,
-                activeProfileId = _currentProfileId,
+                activeProfileId = activeProf?.id ?? _currentProfileId,
                 activeProfileName = ActiveProfileName,
                 autoSwitch = _autoSwitchEnabled,
                 mappingEnabled = _mappingEnabled,
                 hudEnabled = _hudEnabled,
                 startupEnabled = IsStartupEnabled(),
+                multiController = _multiControllerEnabled,
+                selectedControllerIndex = _selectedWebGpIndex,
+                selectedControllerType = _selectedControllerType,
                 exe = _lastDetectedExe
             });
+            SendBatteryToWebView();
         }
 
         private void SendToWebView(object payload)
@@ -235,11 +327,29 @@ namespace ControllerManager
         {
             try
             {
-                var sonyHidList = DeviceList.Local.GetHidDevices(0x054C)
-                    .Where(d => d.ProductID == 0x0CE6 || d.ProductID == 0x0DF2 || d.ProductID == 0x05C4 || d.ProductID == 0x09CC)
+                double sinceHidEvent = (DateTime.Now - _lastHidChangeEvent).TotalMilliseconds;
+                double sinceXboxConn = _xboxConnectedSince == DateTime.MinValue
+                    ? 99999
+                    : (DateTime.Now - _xboxConnectedSince).TotalMilliseconds;
+
+                // Ne jamais scanner HidSharp pendant qu'une manette Xbox Bluetooth LE est en cours d'allumage/appairage
+                bool skipHidScan = _activeSonyDevice == null && (sinceHidEvent < 4500 || sinceXboxConn < 6000);
+
+                var sonyDevs = skipHidScan
+                    ? new List<HidDevice>()
+                    : DeviceList.Local.GetHidDevices(0x054C)
+                        .Where(d => d.ProductID == 0x0CE6 || d.ProductID == 0x0DF2 || d.ProductID == 0x05C4 || d.ProductID == 0x09CC)
+                        .ToList();
+
+                var sonyHidList = sonyDevs
                     .Select(d => new
                     {
-                        name = d.ProductID == 0x0CE6 ? "Sony DualSense (PS5)" : "Sony DualShock 4 (PS4)",
+                        name = d.ProductID switch
+                        {
+                            0x0CE6 => "Sony DualSense (PS5)",
+                            0x0DF2 => "Sony DualSense Edge (PS5)",
+                            _ => "Sony DualShock 4 (PS4)"
+                        },
                         pid = d.ProductID.ToString("X4"),
                         mode = IsBluetoothHid(d) ? "Bluetooth (Sans-fil)" : "USB (Câblé)",
                         maxReport = d.GetMaxInputReportLength(),

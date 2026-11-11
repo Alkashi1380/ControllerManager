@@ -48,11 +48,12 @@
   }
 
   .topbar {
-    height: 68px;
-    padding: 0 24px;
-    display: flex;
+    min-height: 68px;
+    padding: 8px 24px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr);
     align-items: center;
-    justify-content: space-between;
+    flex-shrink: 0;
     border-bottom: 1px solid var(--border-subtle);
     background: rgba(10, 10, 14, 0.6);
     backdrop-filter: blur(20px);
@@ -64,7 +65,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    min-width: 310px;
+    min-width: 0;
   }
 
   .status-orb {
@@ -86,6 +87,7 @@
     flex-direction: column;
     gap: 2px;
     flex: 1;
+    min-width: 0;
   }
 
   .gp-switcher {
@@ -98,7 +100,8 @@
     font-weight: 700;
     cursor: pointer;
     outline: none;
-    max-width: 310px;
+    width: 100%;
+    text-overflow: ellipsis;
   }
   .gp-switcher:hover, .gp-switcher:focus {
     border-color: var(--accent);
@@ -109,6 +112,9 @@
     font-size: 11px;
     color: var(--text-muted);
     padding-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .nav-pills {
@@ -143,10 +149,37 @@
   }
 
   .sys-cluster {
-    display: flex;
+    display: grid;
+    grid-template-columns: 155px minmax(0, 1fr) 90px;
     align-items: center;
     gap: 8px;
-    justify-content: flex-end;
+    min-width: 0;
+  }
+  .sys-cluster > * { height: 32px; min-width: 0; }
+  #mapping-master-btn, #battery-badge { justify-content: center; white-space: nowrap; }
+  #battery-badge { padding-inline: 6px; }
+  #active-process-badge {
+    display: block;
+    line-height: 18px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (max-width: 1200px) {
+    .topbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+    .nav-pills {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      justify-self: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+  }
+
+  @media (max-width: 650px) {
+    .topbar { grid-template-columns: minmax(0, 1fr); padding-inline: 12px; }
+    .nav-pills { grid-row: 3; }
+    .sys-cluster { grid-template-columns: 140px minmax(0, 1fr) 76px; }
   }
 
   .chip {
@@ -1046,7 +1079,15 @@
         <div class="glass-card">
           <div class="card-top">
             <div class="card-title">Bibliothèque de Profils</div>
-            <button class="btn primary" tabindex="-1" onclick="createNewProfile()">+ Nouveau</button>
+            <div style="display:flex; gap:6px;">
+              <button class="btn" tabindex="-1" onclick="cycleProfileUI(-1)" title="Raccourci manette : PS + L1 ou View + LB">◀ Préc.</button>
+              <button class="btn" tabindex="-1" onclick="cycleProfileUI(1)" title="Raccourci manette : PS + R1 ou View + RB">Suiv. ▶</button>
+              <button class="btn primary" tabindex="-1" onclick="createNewProfile()">+ Nouveau</button>
+            </div>
+          </div>
+
+          <div style="font-size:11px; color:var(--text-muted); background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.22); border-radius:6px; padding:6px 8px; margin-bottom:6px;">
+            ⚡ <b>Raccourcis Manette :</b> <code>PS + L1 / R1</code> (ou <code>View + LB / RB</code>) change de profil à la volée • <code>PS + Options</code> met en pause.
           </div>
 
           <label class="switch-wrap" title="Change automatiquement de profil selon l'application au premier plan">
@@ -1069,6 +1110,36 @@
           <div style="display:flex; flex-direction:column; gap:5px;">
             <span style="font-size:11px; color:var(--text-muted); font-weight:600;">EXÉCUTABLE(S) ASSOCIÉ(S)</span>
             <input type="text" id="prof-exe" placeholder="Ex: vlc.exe">
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:8px; padding:10px; border-radius:10px; background:rgba(255,255,255,0.025); border:1px solid var(--border-subtle);">
+            <div style="font-size:11px; color:#60a5fa; font-weight:700; letter-spacing:0.3px;">⚡ RACCOURCIS D'ACTIVATION DE CE PROFIL (2 RACCOURCIS)</div>
+
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <span style="font-size:11px; color:var(--text-muted); font-weight:600;">1️⃣ RACCOURCI CLAVIER (GLOBAL JEUX &amp; BUREAU)</span>
+              <div style="display:flex; gap:6px;">
+                <input type="text" id="prof-shortcut-key" class="key-capture" readonly placeholder="Cliquez puis appuyez (ex: F9, Ctrl+1)…" style="flex:1; font-size:12px;">
+                <button type="button" class="btn" tabindex="-1" onclick="clearProfileShortcutKey()" title="Effacer le raccourci clavier">✕</button>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:5px; margin-top:2px;">
+              <div class="row-between">
+                <span style="font-size:11px; color:var(--text-muted); font-weight:600;">2️⃣ COMBINAISON DE TOUCHES MANETTE</span>
+                <span id="prof-shortcut-pad-display" class="chip mono" style="font-size:10px;">Aucune</span>
+              </div>
+              <input type="hidden" id="prof-shortcut-buttons" value="">
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                <select id="prof-pad-btn1" tabindex="-1" onchange="onManualPadComboSelect()" style="font-size:11px;"></select>
+                <select id="prof-pad-btn2" tabindex="-1" onchange="onManualPadComboSelect()" style="font-size:11px;"></select>
+              </div>
+              <div style="display:flex; gap:6px;">
+                <button type="button" class="btn" id="btn-capture-pad-combo" tabindex="-1" style="flex:1; font-size:11px;" onclick="toggleCaptureProfilePadShortcut()">
+                  🎮 Capturer sur la manette (2 boutons)
+                </button>
+                <button type="button" class="btn" tabindex="-1" onclick="clearProfilePadShortcut()" title="Effacer la combinaison manette">✕</button>
+              </div>
+            </div>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:6px;">
@@ -1148,17 +1219,24 @@
             <div class="profile-hw-block">
               <div class="row-between" style="margin-bottom:8px; flex-wrap:wrap;">
                 <div>
-                  <strong style="font-size:13px; color:#60a5fa;">🎯 Gâchettes adaptatives (L2 / R2)</strong>
-                  <div style="font-size:11px; color:var(--text-muted);">Envoi direct par USB (0x02) et Bluetooth signé CRC-32 (0x31)</div>
+                  <strong style="font-size:13px; color:#60a5fa;">🎯 Gâchettes adaptatives par profil (L2 / R2)</strong>
+                  <div style="font-size:11px; color:var(--text-muted);">Sauvegardées dans ce profil et activées automatiquement au lancement du jeu</div>
                 </div>
                 <div style="display:flex; gap:8px;">
                   <button class="btn ok-btn" tabindex="-1" onclick="resetTriggersToDefaultUI()" title="Envoie le code 0x05 pour relâcher immédiatement les moteurs L2 et R2">
-                    🟢 Relâcher L2/R2 (Défaut)
+                    🟢 Relâcher L2/R2
                   </button>
-                  <button class="btn primary" tabindex="-1" onclick="applyAdaptiveTriggersNow()">
-                    ⚡ Tester sur la PS5
+                  <button class="btn primary" tabindex="-1" onclick="applyAdaptiveTriggersNow(); saveCurrentProfile(true);">
+                    ⚡ Appliquer & Sauver
                   </button>
                 </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:10px;">
+                <button class="btn" tabindex="-1" onclick="applyTriggerPreset('soft')" title="Aucune résistance sur L2 et R2">🟢 Souple</button>
+                <button class="btn" tabindex="-1" onclick="applyTriggerPreset('rigid')" title="Résistance lourde continue (Course / Frein + Accélérateur)">🧱 Rigide</button>
+                <button class="btn" tabindex="-1" onclick="applyTriggerPreset('pistol')" title="Visée souple L2 + Détente franche R2 (FPS / Tir Pistolet)">🔫 Tir Pistolet</button>
+                <button class="btn" tabindex="-1" onclick="applyTriggerPreset('auto')" title="Point dur L2 + Pulsation automatique R2 (Mitraillette)">⚡ Pulsation</button>
               </div>
 
               <div class="analog-config-bar" style="grid-template-columns: 1fr 1fr;">
@@ -1226,6 +1304,7 @@
 
         <div class="driver-tools-grid">
           <button class="btn primary" tabindex="-1" onclick="triggerHidReset()">⚡ Reset HID & Réveiller PS5 (BT)</button>
+          <button class="btn primary" tabindex="-1" onclick="triggerXboxRepair()" style="background:rgba(16,185,129,0.2); border-color:rgba(16,185,129,0.5);">🎮 Réparer Extinction Xbox (BT & Éco. Énergie)</button>
           <button class="btn warn-btn" tabindex="-1" onclick="triggerKillConflicts(false)">🧹 Purger DS4Windows / InputMapper</button>
           <button class="btn ghost-danger" tabindex="-1" onclick="triggerKillConflicts(true)">🛑 Fermer Steam + Tous Émulateurs</button>
           <button class="btn" tabindex="-1" onclick="purgeGhostPortsUI()">👻 Masquer les Ports Fantômes Muets</button>
@@ -1273,6 +1352,12 @@
               <input type="checkbox" id="win-startup-toggle" tabindex="-1" onchange="toggleWindowsStartupUI(this.checked)">
               <span class="switch-track"></span>
               <span>🚀 <b>Démarrer automatiquement avec Windows</b> (Lancement discret en mode Tray <code>--tray</code>)</span>
+            </label>
+
+            <label class="switch-wrap">
+              <input type="checkbox" id="multi-controller-toggle" tabindex="-1" onchange="toggleMultiControllerUI(this.checked)">
+              <span class="switch-track"></span>
+              <span>🎮🎮 <b>Toutes les manettes actives</b> (Piloter avec PlayStation + Xbox simultanément)</span>
             </label>
           </div>
         </div>
@@ -1391,6 +1476,9 @@ let hidDevice = null;
 let currentLightbar = { r: 0, g: 102, b: 255 };
 
 let lastCSharpSonyPacketTime = 0;
+let lastCSharpXboxPacketTime = 0;
+let lastCSharpSonyInputTime = 0;
+let lastCSharpXboxInputTime = 0;
 
 const lsTrail = [];
 const rsTrail = [];
@@ -1425,7 +1513,9 @@ const MAPPING_ACTIONS = [
   "Touche Entrée",
   "Touche Espace (Saut)",
   "Echap",
-  "Alt + Tab"
+  "Alt + Tab",
+  "Profil Suivant",
+  "Profil Précédent"
 ];
 
 const DS4_COLORS = [
@@ -1494,6 +1584,38 @@ function applyAdaptiveTriggersNow() {
   logEvent(`Gâchettes PS5 : L2=${l2Mode} (${l2Force}) | R2=${r2Mode} (${r2Force})`, "ok");
 }
 
+function applyTriggerPreset(preset) {
+  const l2ModeEl = document.getElementById('l2-mode-select');
+  const l2ForceEl = document.getElementById('l2-force-slider');
+  const r2ModeEl = document.getElementById('r2-mode-select');
+  const r2ForceEl = document.getElementById('r2-force-slider');
+
+  if (preset === 'rigid') {
+    l2ModeEl.value = 'continuous'; l2ForceEl.value = 210;
+    r2ModeEl.value = 'continuous'; r2ForceEl.value = 175;
+  } else if (preset === 'pistol') {
+    l2ModeEl.value = 'continuous'; l2ForceEl.value = 120;
+    r2ModeEl.value = 'section';    r2ForceEl.value = 225;
+  } else if (preset === 'auto') {
+    l2ModeEl.value = 'section';    l2ForceEl.value = 160;
+    r2ModeEl.value = 'vibration';  r2ForceEl.value = 220;
+  } else {
+    l2ModeEl.value = 'off';        l2ForceEl.value = 180;
+    r2ModeEl.value = 'off';        r2ForceEl.value = 180;
+  }
+  document.getElementById('l2-force-val').innerText = l2ForceEl.value;
+  document.getElementById('r2-force-val').innerText = r2ForceEl.value;
+  applyAdaptiveTriggersNow();
+  saveCurrentProfile(true);
+}
+
+function cycleProfileUI(delta) {
+  if (!profiles || profiles.length === 0) return;
+  const nextIdx = ((activeProfileIdx + delta) % profiles.length + profiles.length) % profiles.length;
+  loadProfileByIndex(nextIdx, true);
+  sendToHost({ action: "cycleProfile", delta });
+}
+
 function resetTriggersToDefaultUI() {
   document.getElementById('l2-mode-select').value = 'off';
   document.getElementById('r2-mode-select').value = 'off';
@@ -1527,6 +1649,10 @@ function toggleWindowsStartupUI(enabled) {
   sendToHost({ action: "setWindowsStartup", enabled });
 }
 
+function toggleMultiControllerUI(enabled) {
+  sendToHost({ action: "setMultiController", enabled });
+}
+
 function classifyController(idStr) {
   const s = (idStr || "").toLowerCase();
   if (s.includes("0ce6") || s.includes("dualsense") || s.includes("0df2")) {
@@ -1553,6 +1679,13 @@ function triggerHidReset() {
   sendToHost({ action: "resetHidDevices" });
   logEvent("Reset HID envoyé : priorité USB si câblé, sinon réveil Bluetooth PS5...", "ok");
   setTimeout(refreshGamepadListUI, 600);
+}
+
+function triggerXboxRepair() {
+  hiddenGhostIndices.clear();
+  sendToHost({ action: "repairXboxDisconnect" });
+  logEvent("Correctif Anti-Extinction Xbox envoyé : désactivation de la mise en veille Bluetooth/USB Windows...", "ok");
+  setTimeout(refreshGamepadListUI, 800);
 }
 
 function triggerKillConflicts(includeSteam) {
@@ -1595,15 +1728,33 @@ function onSelectControllerSlot(val, fromBackend = false) {
   resetDriftPeaks();
   resetTriggerStats();
   resetLocks();
+  prevButtonStates.fill(false);
+  lastPressTimestamps.fill(0);
+  doubleInputFaults.fill(false);
   lsTrail.length = 0;
   rsTrail.length = 0;
 
+  const isDesktopHost = !!(window.chrome && window.chrome.webview);
+
   if (idx === 99) {
-    logEvent("Pont Direct C# HID Sony sélectionné (Lecture directe Bluetooth / USB).", "ok");
+    logEvent("Pont Direct C# HID Sony sélectionné (Port #99 — PS5 / PS4).", "ok");
+    const vidpidEl = document.getElementById('gp-vidpid');
+    if (vidpidEl) vidpidEl.innerText = "ACTIF: PONT DIRECT C# HID SONY (PS5 / PS4)";
     if (!fromBackend) {
-      sendToHost({ action: "selectController", index: 99, controllerType: "PS5", name: "PS5 Direct HID (C#)" });
+      sendToHost({ action: "selectController", index: 99, controllerType: "PS5", name: "Sony PS5 / PS4 (Pont HID C#)" });
     }
-    refreshGamepadListUI();
+    refreshGamepadListUI(true);
+    return;
+  }
+
+  if (isDesktopHost) {
+    logEvent(`Pont Direct C# XInput sélectionné (Port #${idx} — Manette Xbox).`, "ok");
+    const vidpidEl = document.getElementById('gp-vidpid');
+    if (vidpidEl) vidpidEl.innerText = `ACTIF: PONT DIRECT C# XINPUT (Manette Xbox Slot #${idx})`;
+    if (!fromBackend) {
+      sendToHost({ action: "selectController", index: idx, controllerType: "XBOX", name: `Manette Xbox Series / One (XInput #${idx})` });
+    }
+    refreshGamepadListUI(true);
     return;
   }
 
@@ -1612,6 +1763,8 @@ function onSelectControllerSlot(val, fromBackend = false) {
   if (gp) {
     const info = classifyController(gp.id);
     logEvent(`Contrôle basculé sur Port #${idx} : ${info.label}`, "ok");
+    const vidpidEl = document.getElementById('gp-vidpid');
+    if (vidpidEl) vidpidEl.innerText = `ACTIF: ${info.label.toUpperCase()} (Port #${idx})`;
     if (!fromBackend) {
       sendToHost({
         action: "selectController",
@@ -1621,12 +1774,15 @@ function onSelectControllerSlot(val, fromBackend = false) {
       });
     }
   }
-  refreshGamepadListUI();
+  refreshGamepadListUI(true);
 }
 
-function refreshGamepadListUI() {
-  const rawGps = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+function refreshGamepadListUI(skipHostSync = false) {
+  const isDesktopHost = !!(window.chrome && window.chrome.webview);
+  const rawGps = (!isDesktopHost && navigator.getGamepads) ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
   const gps = rawGps.filter(g => !hiddenGhostIndices.has(g.index));
+  const sonyActive = (performance.now() - lastCSharpSonyPacketTime) < 2500;
+  const xboxActive = (performance.now() - lastCSharpXboxPacketTime) < 2500;
 
   const sel = document.getElementById('gp-selector');
   const slotsBox = document.getElementById('slots-list');
@@ -1637,41 +1793,84 @@ function refreshGamepadListUI() {
   const bridgeOpt = document.createElement('option');
   bridgeOpt.value = 99;
   bridgeOpt.selected = (activeGpIndex === 99);
-  bridgeOpt.innerText = `[Pont Direct C#] Sony PS5 / PS4 (Bluetooth & USB)`;
+  bridgeOpt.innerText = `[Port #99 — Pont C# HID] Sony PS5 / PS4 (Bluetooth & USB)`;
   sel.appendChild(bridgeOpt);
 
-  gps.forEach(gp => {
-    const info = classifyController(gp.id);
-    const opt = document.createElement('option');
-    opt.value = gp.index;
-    opt.selected = (gp.index === activeGpIndex);
-    opt.innerText = `[Port Navigateur #${gp.index}] ${info.label}`;
-    sel.appendChild(opt);
+  if (isDesktopHost) {
+    const xboxOpt = document.createElement('option');
+    xboxOpt.value = 0;
+    xboxOpt.selected = (activeGpIndex === 0);
+    xboxOpt.innerText = `[Port #0 — Pont C# XInput] Manette Xbox Series / One`;
+    sel.appendChild(xboxOpt);
 
-    const row = document.createElement('div');
-    row.className = 'slot-row' + (gp.index === activeGpIndex ? ' active-slot' : '');
-    row.innerHTML = `
+    const sonyRow = document.createElement('div');
+    sonyRow.className = 'slot-row' + (activeGpIndex === 99 ? ' active-slot' : '');
+    sonyRow.innerHTML = `
       <div>
-        <strong>Port Navigateur #${gp.index} — ${escapeHtml(info.label)}</strong>
-        <div class="mono" style="font-size:11px; color:var(--text-muted);">${escapeHtml(gp.id)}</div>
+        <strong>Port #99 — Sony DualSense PS5 / DualShock 4 (Pont HID C#)</strong>
+        <div class="mono" style="font-size:11px; color:var(--text-muted);">Profil indépendant Sony • ${sonyActive ? '🟢 Signal HID actif' : 'En attente'}</div>
       </div>
-      <button class="btn ${gp.index === activeGpIndex ? 'primary' : ''}" tabindex="-1" onclick="onSelectControllerSlot(${gp.index})">
-        ${gp.index === activeGpIndex ? '✓ Actif' : 'Choisir'}
+      <button class="btn ${activeGpIndex === 99 ? 'primary' : ''}" tabindex="-1" onclick="onSelectControllerSlot(99)">
+        ${activeGpIndex === 99 ? '✓ Actif' : 'Choisir PS5/PS4'}
       </button>
     `;
-    slotsBox.appendChild(row);
-  });
+    slotsBox.appendChild(sonyRow);
 
-  if (gps.length > 0 || (performance.now() - lastCSharpSonyPacketTime < 3000)) {
-    document.getElementById('gp-orb').classList.add('connected');
+    const xboxRow = document.createElement('div');
+    xboxRow.className = 'slot-row' + (activeGpIndex === 0 ? ' active-slot' : '');
+    xboxRow.innerHTML = `
+      <div>
+        <strong>Port #0 — Manette Xbox Series / One (Pont XInput C#)</strong>
+        <div class="mono" style="font-size:11px; color:var(--text-muted);">Profil indépendant Xbox • ${xboxActive ? '🟢 Signal XInput actif' : 'En attente'}</div>
+      </div>
+      <button class="btn ${activeGpIndex === 0 ? 'primary' : ''}" tabindex="-1" onclick="onSelectControllerSlot(0)">
+        ${activeGpIndex === 0 ? '✓ Actif' : 'Choisir Xbox'}
+      </button>
+    `;
+    slotsBox.appendChild(xboxRow);
+  } else {
+    gps.forEach(gp => {
+      const info = classifyController(gp.id);
+      const opt = document.createElement('option');
+      opt.value = gp.index;
+      opt.selected = (gp.index === activeGpIndex);
+      opt.innerText = `[Port Navigateur #${gp.index}] ${info.label}`;
+      sel.appendChild(opt);
+
+      const row = document.createElement('div');
+      row.className = 'slot-row' + (gp.index === activeGpIndex ? ' active-slot' : '');
+      row.innerHTML = `
+        <div>
+          <strong>Port Navigateur #${gp.index} — ${escapeHtml(info.label)}</strong>
+          <div class="mono" style="font-size:11px; color:var(--text-muted);">${escapeHtml(gp.id)}</div>
+        </div>
+        <button class="btn ${gp.index === activeGpIndex ? 'primary' : ''}" tabindex="-1" onclick="onSelectControllerSlot(${gp.index})">
+          ${gp.index === activeGpIndex ? '✓ Actif' : 'Choisir'}
+        </button>
+      `;
+      slotsBox.appendChild(row);
+    });
   }
 
-  const controllerList = [{ index: 99, type: "PS5", label: "PS5/PS4 Direct HID (C#)" }];
-  gps.forEach(g => {
-    const inf = classifyController(g.id);
-    controllerList.push({ index: g.index, type: inf.type, label: inf.label });
-  });
-  sendToHost({ action: "updateControllerList", controllers: controllerList, activeIndex: activeGpIndex });
+  if (gps.length > 0 || sonyActive || xboxActive) {
+    document.getElementById('gp-orb').classList.add('connected');
+  } else {
+    document.getElementById('gp-orb').classList.remove('connected');
+  }
+
+  if (!skipHostSync) {
+    const controllerList = [
+      { index: 99, type: "PS5", label: "Sony PS5 / PS4 (Pont HID C#)" },
+      { index: 0, type: "XBOX", label: "Manette Xbox Series / One (XInput C#)" }
+    ];
+    gps.forEach(g => {
+      if (g.index !== 0) {
+        const inf = classifyController(g.id);
+        controllerList.push({ index: g.index, type: inf.type, label: inf.label });
+      }
+    });
+    sendToHost({ action: "updateControllerList", controllers: controllerList, activeIndex: activeGpIndex });
+  }
 }
 
 function getDefaultProfiles() {
@@ -1781,6 +1980,7 @@ function initUI() {
   };
 
   initMappingGrid();
+  initProfileShortcutControls();
   initProfiles();
   drawRadarCanvas('canvas-ls', 0, 0, deadzone, false, lsTrail);
   drawRadarCanvas('canvas-rs', 0, 0, deadzone, false, rsTrail);
@@ -2657,6 +2857,8 @@ function migrateProfile(p) {
   if (!p || typeof p !== 'object') return p;
   if (typeof p.exe !== 'string') p.exe = '';
   if (!p.name) p.name = 'Profil';
+  if (typeof p.shortcutKey !== 'string') p.shortcutKey = '';
+  if (typeof p.shortcutButtons !== 'string') p.shortcutButtons = '';
   if (!p.buttonMapping || typeof p.buttonMapping !== 'object') p.buttonMapping = {};
   if (!p.color || typeof p.color !== 'object') p.color = { r: 0, g: 102, b: 255 };
   if (!(p.deadzone >= 0 && p.deadzone <= 0.5)) p.deadzone = 0.08;
@@ -2939,6 +3141,193 @@ function initProfiles() {
   loadProfileByIndex(0, false);
 }
 
+let isCapturingPadCombo = false;
+let capturePadTimer = null;
+let capturePadHoldTimer = null;
+let capturePadCandidate = [];
+
+function formatPadShortcutDisplay(raw) {
+  if (!raw || typeof raw !== 'string' || !raw.trim()) return 'Aucune';
+  const parts = raw.split('+').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n >= 0 && n < 20);
+  if (parts.length === 0) return 'Aucune';
+  return parts.map(idx => BUTTON_SHORT[idx] || ('B' + idx)).join(' + ');
+}
+
+function syncPadShortcutUI(raw) {
+  const clean = (raw || '').trim();
+  const hidden = document.getElementById('prof-shortcut-buttons');
+  const badge = document.getElementById('prof-shortcut-pad-display');
+  const sel1 = document.getElementById('prof-pad-btn1');
+  const sel2 = document.getElementById('prof-pad-btn2');
+  if (hidden) hidden.value = clean;
+
+  const parts = clean ? clean.split('+').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n >= 0 && n < 20) : [];
+  if (badge) {
+    if (parts.length > 0) {
+      badge.className = 'chip ok mono';
+      badge.innerText = '🎮 ' + formatPadShortcutDisplay(clean);
+    } else {
+      badge.className = 'chip mono';
+      badge.innerText = 'Aucune';
+    }
+  }
+  if (sel1) sel1.value = parts.length >= 1 ? String(parts[0]) : '';
+  if (sel2) sel2.value = parts.length >= 2 ? String(parts[1]) : '';
+}
+
+function initProfileShortcutControls() {
+  const sel1 = document.getElementById('prof-pad-btn1');
+  const sel2 = document.getElementById('prof-pad-btn2');
+  if (sel1 && sel2) {
+    sel1.innerHTML = '<option value="">— Bouton Manette 1 —</option>';
+    sel2.innerHTML = '<option value="">— Bouton Manette 2 —</option>';
+    BUTTON_SHORT.forEach((label, idx) => {
+      const o1 = document.createElement('option');
+      o1.value = String(idx);
+      o1.textContent = `[B${idx}] ${label}`;
+      sel1.appendChild(o1);
+
+      const o2 = document.createElement('option');
+      o2.value = String(idx);
+      o2.textContent = `[B${idx}] ${label}`;
+      sel2.appendChild(o2);
+    });
+  }
+
+  const keyInput = document.getElementById('prof-shortcut-key');
+  if (keyInput) {
+    const idlePlaceholder = 'Cliquez puis appuyez (ex: F9, Ctrl+1)…';
+    let loneMod = null;
+    keyInput.onfocus = () => {
+      keyInput.classList.add('listening');
+      keyInput.placeholder = 'Appuyez sur une touche ou combinaison… (Échap = annuler)';
+      sendToHost({ action: 'setCapturingShortcut', capturing: true });
+    };
+    keyInput.onblur = () => {
+      keyInput.classList.remove('listening');
+      keyInput.placeholder = idlePlaceholder;
+      sendToHost({ action: 'setCapturingShortcut', capturing: false });
+    };
+    keyInput.onkeydown = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        keyInput.blur();
+        return;
+      }
+      if (LONE_MODIFIERS[e.key]) {
+        loneMod = LONE_MODIFIERS[e.key];
+        return;
+      }
+      loneMod = null;
+      const combo = comboFromKeyEvent(e);
+      if (combo) {
+        keyInput.value = combo;
+        keyInput.blur();
+        logEvent(`Raccourci clavier du profil défini sur : ${combo}`, 'ok');
+        saveCurrentProfile(true);
+      }
+    };
+    keyInput.onkeyup = (e) => {
+      loneMod = null;
+    };
+  }
+}
+
+function clearProfileShortcutKey() {
+  const keyInput = document.getElementById('prof-shortcut-key');
+  if (keyInput) keyInput.value = '';
+  saveCurrentProfile(true);
+}
+
+function onManualPadComboSelect() {
+  const b1 = document.getElementById('prof-pad-btn1')?.value ?? '';
+  const b2 = document.getElementById('prof-pad-btn2')?.value ?? '';
+  const chosen = [];
+  if (b1 !== '') chosen.push(parseInt(b1, 10));
+  if (b2 !== '' && b2 !== b1) chosen.push(parseInt(b2, 10));
+  const raw = chosen.join('+');
+  syncPadShortcutUI(raw);
+  saveCurrentProfile(true);
+}
+
+function clearProfilePadShortcut() {
+  stopCaptureProfilePadShortcut();
+  syncPadShortcutUI('');
+  saveCurrentProfile(true);
+}
+
+function stopCaptureProfilePadShortcut() {
+  if (isCapturingPadCombo) {
+    sendToHost({ action: 'setCapturingShortcut', capturing: false });
+  }
+  isCapturingPadCombo = false;
+  capturePadCandidate = [];
+  clearTimeout(capturePadTimer);
+  clearTimeout(capturePadHoldTimer);
+  capturePadTimer = null;
+  capturePadHoldTimer = null;
+  const btn = document.getElementById('btn-capture-pad-combo');
+  if (btn) {
+    btn.className = 'btn';
+    btn.innerText = '🎮 Capturer sur la manette (2 boutons)';
+  }
+}
+
+function toggleCaptureProfilePadShortcut() {
+  if (isCapturingPadCombo) {
+    stopCaptureProfilePadShortcut();
+    return;
+  }
+  isCapturingPadCombo = true;
+  capturePadCandidate = [];
+  sendToHost({ action: 'setCapturingShortcut', capturing: true });
+  const btn = document.getElementById('btn-capture-pad-combo');
+  if (btn) {
+    btn.className = 'btn primary';
+    btn.innerText = '⏳ Maintenez 2 boutons sur la manette… (Annuler)';
+  }
+  capturePadTimer = setTimeout(() => {
+    stopCaptureProfilePadShortcut();
+  }, 7000);
+}
+
+function finalizeCapturedPadCombo(indices) {
+  if (!indices || indices.length < 2) return;
+  const unique = [...new Set(indices)].slice(0, 3);
+  const raw = unique.join('+');
+  stopCaptureProfilePadShortcut();
+  syncPadShortcutUI(raw);
+  logEvent(`Combinaison manette enregistrée : ${formatPadShortcutDisplay(raw)}`, 'ok');
+  saveCurrentProfile(true);
+}
+
+function processLiveButtonsForProfileShortcuts(buttonsPressedArray) {
+  if (!Array.isArray(buttonsPressedArray)) return;
+  const pressed = [];
+  for (let i = 0; i < Math.min(20, buttonsPressedArray.length); i++) {
+    if (buttonsPressedArray[i]) pressed.push(i);
+  }
+
+  if (isCapturingPadCombo) {
+    if (pressed.length >= 2) {
+      if (pressed.length >= capturePadCandidate.length) {
+        capturePadCandidate = pressed.slice(0, 3);
+      }
+      if (!capturePadHoldTimer) {
+        capturePadHoldTimer = setTimeout(() => {
+          if (isCapturingPadCombo && capturePadCandidate.length >= 2) {
+            finalizeCapturedPadCombo(capturePadCandidate);
+          }
+        }, 300);
+      }
+    } else if (pressed.length === 0 && capturePadCandidate.length >= 2) {
+      finalizeCapturedPadCombo(capturePadCandidate);
+    }
+    return;
+  }
+}
+
 function renderProfileList() {
   const list = document.getElementById('profile-list');
   list.innerHTML = '';
@@ -2951,13 +3340,15 @@ function renderProfileList() {
     const mapCount = p.buttonMapping ? Object.keys(p.buttonMapping).length : 0;
     const hasMouse = ((p.leftStick || {}).mode === 'mouse' || (p.rightStick || {}).mode === 'mouse' || p.touchpadMouseEnabled);
     const hasTrig = (p.l2TriggerMode && p.l2TriggerMode !== 'off') || (p.r2TriggerMode && p.r2TriggerMode !== 'off');
+    const keyTag = p.shortcutKey ? `• ⌨️ ${escapeHtml(p.shortcutKey)}` : '';
+    const padTag = p.shortcutButtons ? `• 🎮 ${escapeHtml(formatPadShortcutDisplay(p.shortcutButtons))}` : '';
 
     item.innerHTML = `
       <div class="prof-item-left">
         <span class="prof-color-orb" style="background:rgb(${c.r},${c.g},${c.b}); box-shadow:0 0 10px rgb(${c.r},${c.g},${c.b});"></span>
         <div>
           <div class="prof-item-title">${escapeHtml(p.name)}</div>
-          <div class="prof-item-exe mono">${escapeHtml(p.exe)} ${hasMouse ? '• 🖱️ Souris' : ''} ${hasTrig ? '• 🎯 L2/R2' : ''}</div>
+          <div class="prof-item-exe mono">${escapeHtml(p.exe)} ${hasMouse ? '• 🖱️ Souris' : ''} ${hasTrig ? '• 🎯 L2/R2' : ''} ${keyTag} ${padTag}</div>
         </div>
       </div>
       <span class="chip mono">${mapCount} B</span>
@@ -2974,6 +3365,11 @@ function loadProfileByIndex(idx, notifyBackend = true) {
 
   document.getElementById('prof-name').value = p.name || "Profil";
   document.getElementById('prof-exe').value = p.exe || "default";
+
+  const keyInput = document.getElementById('prof-shortcut-key');
+  if (keyInput) keyInput.value = p.shortcutKey || "";
+  stopCaptureProfilePadShortcut();
+  syncPadShortcutUI(p.shortcutButtons || "");
 
   const dz = typeof p.deadzone === 'number' ? p.deadzone : 0.08;
   document.getElementById('dz-slider').value = dz;
@@ -2998,7 +3394,7 @@ function loadProfileByIndex(idx, notifyBackend = true) {
   document.getElementById('r2-force-val').innerText = p.r2TriggerForce || 180;
 
   if (p.color) {
-    selectLightbarSwatch(p.color.r, p.color.g, p.color.b);
+    selectLightbarSwatch(p.color.r, p.color.g, p.color.b, false);
   }
 
   for (let i = 0; i < 20; i++) {
@@ -3014,7 +3410,7 @@ function loadProfileByIndex(idx, notifyBackend = true) {
 
   if (notifyBackend) {
     document.getElementById('autoswitch-toggle').checked = false;
-    document.getElementById('active-process-badge').innerText = `🎮 ${p.name}`;
+    updateProfileBadge(p.name);
     sendToHost({ action: "selectProfile", profileId: p.id, profileName: p.name, autoSwitch: false });
   }
 }
@@ -3025,6 +3421,8 @@ function saveCurrentProfile(silent = false) {
 
   const name = document.getElementById('prof-name').value.trim() || "Profil Custom";
   const exe = document.getElementById('prof-exe').value.trim() || "game.exe";
+  const shortcutKey = (document.getElementById('prof-shortcut-key')?.value || "").trim();
+  const shortcutButtons = (document.getElementById('prof-shortcut-buttons')?.value || "").trim();
   const touchpadMouseEnabled = document.getElementById('tp-enable-toggle').checked;
 
   const l2TriggerMode = document.getElementById('l2-mode-select').value || "off";
@@ -3045,6 +3443,8 @@ function saveCurrentProfile(silent = false) {
     id: p.id || newProfileId(),
     name,
     exe,
+    shortcutKey,
+    shortcutButtons,
     deadzone,
     leftStick: JSON.parse(JSON.stringify(currentSticks.left)),
     rightStick: JSON.parse(JSON.stringify(currentSticks.right)),
@@ -3085,6 +3485,8 @@ function createNewProfile() {
     id: newProfileId(),
     name: `Profil #${profiles.length + 1}`,
     exe: "game.exe",
+    shortcutKey: "",
+    shortcutButtons: "",
     deadzone: 0.08,
     leftStickMode: "native",
     rightStickMode: "native",
@@ -3178,7 +3580,7 @@ function toggleAutoSwitch(enabled) {
   sendToHost({ action: "setAutoSwitch", enabled });
 }
 
-function selectLightbarSwatch(r, g, b) {
+function selectLightbarSwatch(r, g, b, notifyHost = true) {
   currentLightbar = { r, g, b };
   const rgbStr = `rgb(${r}, ${g}, ${b})`;
   const glowStr = `rgba(${r}, ${g}, ${b}, 0.28)`;
@@ -3202,7 +3604,9 @@ function selectLightbarSwatch(r, g, b) {
     else orb.classList.remove('selected');
   });
 
-  setDS4Lightbar(r, g, b);
+  if (notifyHost) {
+    setDS4Lightbar(r, g, b);
+  }
 }
 
 window.addEventListener("gamepadconnected", (e) => {
@@ -3216,36 +3620,38 @@ window.addEventListener("gamepaddisconnected", (e) => {
   refreshGamepadListUI();
 });
 
-// Dessin en direct du Pavé Tactile DualSense (1920x1080) avec séparation Gauche (B17) / Droite (B18) et 2 doigts
+// Dessin en direct du Pavé Tactile DualSense (1920x1080) avec séparation Gauche (B17) / Droite (B18) au seuil 1060 (identique au C#)
+const TOUCHPAD_RIGHT_CLICK_MIN_X = 1060;
 function drawTouchpadSurface(t1Active, t1X, t1Y, t2Active, t2X, t2Y, physClick) {
   const c = document.getElementById('canvas-touchpad');
   if (!c) return;
   const ctx = c.getContext('2d');
   const w = c.width, h = c.height;
+  const splitX = (TOUCHPAD_RIGHT_CLICK_MIN_X / 1920) * w;
 
   ctx.clearRect(0, 0, w, h);
 
-  // Si le pavé est pressé mécaniquement, illuminer la moitié Gauche ou Droite correspondante
+  // Si le pavé est pressé mécaniquement, illuminer la zone Gauche ou Droite correspondante (seuil 1060 comme côté C#)
   if (physClick) {
-    const isRight = t1Active && t1X > 960;
+    const isRight = t1Active && t1X > TOUCHPAD_RIGHT_CLICK_MIN_X;
     ctx.fillStyle = 'rgba(59, 130, 246, 0.25)';
-    if (isRight) ctx.fillRect(w / 2, 0, w / 2, h);
-    else ctx.fillRect(0, 0, w / 2, h);
+    if (isRight) ctx.fillRect(splitX, 0, w - splitX, h);
+    else ctx.fillRect(0, 0, splitX, h);
   }
 
-  // Ligne médiane de séparation Pavé Gauche (B17) / Pavé Droit (B18)
+  // Ligne de séparation Pavé Gauche (B17) / Pavé Droit (B18) alignée sur TouchpadRightClickMinX (1060)
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
-  ctx.moveTo(w / 2, 6);
-  ctx.lineTo(w / 2, h - 6);
+  ctx.moveTo(splitX, 6);
+  ctx.lineTo(splitX, h - 6);
   ctx.stroke();
   ctx.setLineDash([]);
 
   ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
   ctx.font = '10px Consolas, monospace';
-  ctx.fillText('CLIC GAUCHE (B17)', 10, h - 8);
-  ctx.fillText('CLIC DROIT (B18)', w / 2 + 10, h - 8);
+  ctx.fillText('CLIC GAUCHE (B17 ≤ 1060)', 10, h - 8);
+  ctx.fillText('CLIC DROIT (B18 > 1060)', splitX + 10, h - 8);
 
   if (t1Active) {
     const px1 = (t1X / 1920) * w;
@@ -3345,9 +3751,17 @@ function renderControllerTelemetry(lx, ly, rx, ry, l2, r2, buttonsPressedArray) 
     }
   }
   document.getElementById('lock-counter').innerText = `${lockedButtons.size} / 20`;
+  processLiveButtonsForProfileShortcuts(buttonsPressedArray);
 }
 
 function pollGamepad() {
+  // Dans l'application de bureau (WebView2), la lecture Sony HID et Xbox XInput est assurée à 100 % par le C#
+  // (sonyHidState / xboxHidState). Ne pas appeler navigator.getGamepads() dans WebView2 évite que Chromium
+  // n'ouvre un descripteur concurrent sur la manette Xbox Bluetooth LE (cause de l'extinction après 2 s).
+  if (window.chrome && window.chrome.webview) {
+    return;
+  }
+
   const rawGps = navigator.getGamepads ? navigator.getGamepads() : [];
   const validGps = [];
   for (let i = 0; i < rawGps.length; i++) {
@@ -3364,11 +3778,25 @@ function pollGamepad() {
   if (autoFocus && validGps.length >= 1) {
     for (const candidate of validGps) {
       if (candidate.index !== activeGpIndex) {
-        const mainPressed = candidate.buttons.slice(0, 6).some(b => b && b.pressed);
-        if (mainPressed) {
+        const anyBtnPressed = candidate.buttons.some(b => b && b.pressed);
+        const anyStickMoved = candidate.axes && candidate.axes.some(a => Math.abs(a) > 0.25 && Math.abs(a) !== 1.0);
+        if (anyBtnPressed || anyStickMoved) {
           onSelectControllerSlot(candidate.index);
           break;
         }
+      }
+    }
+  }
+
+  if (isCapturingPadCombo && validGps.length >= 1) {
+    for (const candidate of validGps) {
+      const btnArr = new Array(20).fill(false);
+      for (let i = 0; i < Math.min(20, candidate.buttons.length); i++) {
+        btnArr[i] = candidate.buttons[i] ? candidate.buttons[i].pressed : false;
+      }
+      if (btnArr.filter(Boolean).length >= 2) {
+        processLiveButtonsForProfileShortcuts(btnArr);
+        break;
       }
     }
   }
@@ -3600,10 +4028,28 @@ function logEvent(msg, type = "") {
   box.prepend(div);
 }
 
-function updateBatteryBadge(pct, charging) {
+function updateProfileBadge(name) {
+  const badge = document.getElementById('active-process-badge');
+  const controller = window.chrome?.webview ? (activeGpIndex === 99 ? '[PS5/PS4] ' : '[Xbox] ') : '';
+  const text = `🎮 ${controller}${name}`;
+  if (badge.textContent !== text) {
+    badge.textContent = text;
+    badge.title = text;
+  }
+}
+
+function updateBatteryBadge(pct, charging, device, lowBatteryAlert) {
   const b = document.getElementById('battery-badge');
-  b.innerText = `🔋 ${pct}% ${charging ? '⚡' : ''}`;
-  b.className = 'chip mono ' + (pct <= 15 ? 'err' : pct <= 30 ? 'warn' : 'ok');
+  const known = Number.isFinite(pct);
+  const text = known
+    ? `${lowBatteryAlert ? '🪫 ' + device : '🔋'} ${pct}%${charging ? ' ⚡' : ''}`
+    : '🔋 --%';
+  const style = 'chip mono' + (known ? ' ' + (lowBatteryAlert ? 'err' : pct <= 30 ? 'warn' : 'ok') : '');
+  if (b.textContent !== text) b.textContent = text;
+  if (b.className !== style) b.className = style;
+  b.title = known
+    ? `${lowBatteryAlert ? 'Batterie faible' : 'Batterie'} ${device} · ${pct}%`
+    : `Batterie ${device} indisponible`;
 }
 
 function sendToHost(payload) {
@@ -3634,9 +4080,19 @@ if (window.chrome && window.chrome.webview) {
       if (typeof data.startupEnabled === 'boolean') {
         document.getElementById('win-startup-toggle').checked = data.startupEnabled;
       }
+      if (typeof data.multiController === 'boolean') {
+        const mcToggle = document.getElementById('multi-controller-toggle');
+        if (mcToggle) mcToggle.checked = data.multiController;
+      }
+      if (typeof data.selectedControllerIndex === 'number' && data.selectedControllerIndex !== activeGpIndex) {
+        activeGpIndex = data.selectedControllerIndex;
+        prevButtonStates.fill(false);
+        lastPressTimestamps.fill(0);
+      }
+      refreshGamepadListUI(true);
       const idx = findProfileIndex(data.activeProfileId, data.activeProfileName);
       loadProfileByIndex(idx >= 0 ? idx : 0, false);
-      document.getElementById('active-process-badge').innerText = `🎮 ${profiles[activeProfileIdx].name}`;
+      updateProfileBadge(profiles[activeProfileIdx].name);
     }
     else if (data.type === 'hardwareInventory') {
       const box = document.getElementById('sony-hw-list');
@@ -3657,15 +4113,13 @@ if (window.chrome && window.chrome.webview) {
           box.appendChild(row);
         });
       }
+      refreshGamepadListUI(true);
     }
     else if (data.type === 'sonyHidState') {
-      lastCSharpSonyPacketTime = performance.now();
+      const nowPerf = performance.now();
+      lastCSharpSonyPacketTime = nowPerf;
       document.getElementById('gp-orb').classList.add('connected');
       document.getElementById('hid-bridge-status').innerText = `Pont C# HID : ${data.mode}`;
-
-      if (typeof data.battery === 'number') {
-        updateBatteryBadge(data.battery, data.charging);
-      }
 
       const tpBadge = document.getElementById('touchpad-badge');
       if (tpBadge) {
@@ -3684,14 +4138,46 @@ if (window.chrome && window.chrome.webview) {
       drawTouchpadSurface(data.t1Active, data.t1X, data.t1Y, data.t2Active, data.t2X, data.t2Y, data.physTouchClick);
 
       const anyBtn = Array.isArray(data.buttons) && data.buttons.some(Boolean);
-      const anyStick = Math.hypot(data.lx || 0, data.ly || 0) > 0.15 || Math.hypot(data.rx || 0, data.ry || 0) > 0.15;
+      const anyStick = Math.hypot(data.lx || 0, data.ly || 0) > 0.18 || Math.hypot(data.rx || 0, data.ry || 0) > 0.18;
+      if (anyBtn || anyStick || data.t1Active) {
+        lastCSharpSonyInputTime = nowPerf;
+      }
 
-      if (activeGpIndex === 99 || ((anyBtn || anyStick || data.t1Active) && document.getElementById('autofocus-gp-toggle')?.checked)) {
-        if (activeGpIndex !== 99) {
-          activeGpIndex = 99;
-          document.getElementById('gp-selector').value = "99";
-        }
-        document.getElementById('gp-vidpid').innerText = `ACTIF: PONT DIRECT C# HID (${data.mode}) • Raccourcis pausés pendant le test`;
+      if (isCapturingPadCombo && Array.isArray(data.buttons) && activeGpIndex === 99) {
+        processLiveButtonsForProfileShortcuts(data.buttons);
+      }
+
+      if (activeGpIndex !== 99 && (anyBtn || data.t1Active) && (nowPerf - lastCSharpXboxInputTime) > 800 && document.getElementById('autofocus-gp-toggle')?.checked) {
+        onSelectControllerSlot(99);
+      }
+
+      // Isolation stricte : sonyHidState ne pilote le rendu télémétrique QUE si le Port #99 (Sony) est sélectionné
+      if (activeGpIndex === 99) {
+        document.getElementById('gp-vidpid').innerText = `ACTIF: PONT DIRECT C# HID SONY (${data.mode})`;
+        renderControllerTelemetry(data.lx || 0, data.ly || 0, data.rx || 0, data.ry || 0, data.l2 || 0, data.r2 || 0, data.buttons || []);
+      }
+    }
+    else if (data.type === 'xboxHidState') {
+      const nowPerf = performance.now();
+      lastCSharpXboxPacketTime = nowPerf;
+      document.getElementById('gp-orb').classList.add('connected');
+      const anyBtn = Array.isArray(data.buttons) && data.buttons.some(Boolean);
+      const anyStick = Math.hypot(data.lx || 0, data.ly || 0) > 0.18 || Math.hypot(data.rx || 0, data.ry || 0) > 0.18;
+      if (anyBtn || anyStick) {
+        lastCSharpXboxInputTime = nowPerf;
+      }
+
+      if (isCapturingPadCombo && Array.isArray(data.buttons) && activeGpIndex !== 99) {
+        processLiveButtonsForProfileShortcuts(data.buttons);
+      }
+
+      if (activeGpIndex === 99 && anyBtn && (nowPerf - lastCSharpSonyInputTime) > 800 && document.getElementById('autofocus-gp-toggle')?.checked) {
+        onSelectControllerSlot(data.slot ?? 0);
+      }
+
+      // Isolation stricte : xboxHidState ne pilote le rendu télémétrique QUE si le Port Xbox (#0..#3) est sélectionné
+      if (activeGpIndex !== 99) {
+        document.getElementById('gp-vidpid').innerText = `ACTIF: PONT DIRECT C# XINPUT (Manette Xbox Slot #${data.slot ?? 0})`;
         renderControllerTelemetry(data.lx || 0, data.ly || 0, data.rx || 0, data.ry || 0, data.l2 || 0, data.r2 || 0, data.buttons || []);
       }
     }
@@ -3702,7 +4188,7 @@ if (window.chrome && window.chrome.webview) {
       onSelectControllerSlot(data.index, true);
     }
     else if (data.type === 'battery') {
-      updateBatteryBadge(data.percent, data.charging);
+      updateBatteryBadge(data.percent, data.charging, data.device, data.lowBatteryAlert);
     }
     else if (data.type === 'activeProcess') {
       if (typeof data.autoSwitch === 'boolean') {
@@ -3712,7 +4198,7 @@ if (window.chrome && window.chrome.webview) {
         mappingMasterEnabled = data.mappingEnabled;
         updateMappingMasterUI();
       }
-      document.getElementById('active-process-badge').innerText = `🎮 ${data.profileName}`;
+      updateProfileBadge(data.profileName);
       const idx = findProfileIndex(data.profileId, data.profileName);
       if (idx >= 0 && idx !== activeProfileIdx) {
         loadProfileByIndex(idx, false);

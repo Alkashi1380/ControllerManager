@@ -8,7 +8,7 @@
   #define AppVersion "1.0.1"
 #endif
 #ifndef SourceDir
-  #define SourceDir "..\artifacts\publish"
+  #define SourceDir "..\artifacts\publish\win-x64"
 #endif
 
 [Setup]
@@ -37,7 +37,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 ; Ferme l'appli en cours (verrou d'instance unique de Program.cs) avant de remplacer ses fichiers
-AppMutex=ControllerManager.SingleInstance
+AppMutex=ControllerManager.SingleInstance,Local\ControllerManager.SingleInstance,Global\ControllerManager.SingleInstance
 CloseApplications=yes
 RestartApplications=no
 

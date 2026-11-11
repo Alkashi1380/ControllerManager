@@ -4,7 +4,6 @@ using HidSharp;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using Microsoft.Win32;
-using Windows.Gaming.Input;
 
 namespace ControllerManager
 {
@@ -17,19 +16,33 @@ namespace ControllerManager
         private readonly ToolStripMenuItem _mappingToggleMenuItem;
         private readonly ToolStripMenuItem _hudToggleMenuItem;
         private readonly ToolStripMenuItem _startupToggleMenuItem;
+        private readonly ToolStripMenuItem _multiControllerMenuItem;
         private readonly ToolStripMenuItem _driverToolsMenuItem;
         private readonly System.Windows.Forms.Timer _backgroundTimer;
         private Form? _dashboardForm;
         private WebView2? _webView;
         private HudOverlayForm? _hudForm;
+        private volatile bool _isShuttingDown = false;
+        private bool _isOpeningDashboard = false;
 
         // volatile : lus par le thread d'entrées pendant que le thread UI les remplace (on remplace la liste entière, jamais en place)
         private volatile List<GamepadProfile> _profiles = new();
-        // Le profil actif est repéré par son id (stable), pas par son nom (modifiable, pas forcément unique)
+        // Le profil actif est séparé par manette (Sony PS5/PS4 vs Manette Xbox) pour que les deux manettes ne se marchent jamais dessus
         private volatile string _currentProfileId = "";
+        private volatile string _currentXboxProfileId = "";
+
+        private GamepadProfile? GetActiveProfileForSource(int source)
+        {
+            string targetId = source == SourceXbox ? _currentXboxProfileId : _currentProfileId;
+            return _profiles.FirstOrDefault(p => p.id == targetId)
+                   ?? _profiles.FirstOrDefault(p => p.id == _currentProfileId)
+                   ?? _profiles.FirstOrDefault();
+        }
 
         private GamepadProfile? GetActiveProfile() =>
-            _profiles.FirstOrDefault(p => p.id == _currentProfileId);
+            _selectedControllerType == "XBOX"
+                ? GetActiveProfileForSource(SourceXbox)
+                : GetActiveProfileForSource(SourceSony);
 
         private string ActiveProfileName => GetActiveProfile()?.name ?? "Jeux / Natif (Aucun raccourci)";
 
@@ -56,6 +69,9 @@ namespace ControllerManager
         private readonly object _sonyLock = new();
         private DateTime _lastWebUiPush = DateTime.MinValue;
         private DateTime _lastDeviceScan = DateTime.MinValue;
+        private volatile bool _sonyDeviceListDirty = true;
+        private DateTime _lastHidChangeEvent = DateTime.MinValue;
+        private DateTime _xboxConnectedSince = DateTime.MinValue;
 
         private double _mouseCarryX = 0;
         private double _mouseCarryY = 0;
@@ -81,10 +97,6 @@ namespace ControllerManager
         private bool _prevPhysTouchClick = false;
         private bool _touchClickLatchedRight = false;
 
-        private int _lastBatteryPercent = 100;
-        private bool _lastBatteryCharging = false;
-        private DateTime _lastBatteryCheck = DateTime.MinValue;
-        private int _lowBatteryAlertLevel = 100;
         private SynchronizationContext? _uiContext;
 
         // Les menus et bulles WinForms ne doivent être touchés que depuis le thread UI
@@ -112,14 +124,20 @@ namespace ControllerManager
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(SettingsRegistryKey, false);
-                return key?.GetValue("MultiController") is int v && v != 0;
+                var val = key?.GetValue("MultiController");
+                return val is int v ? v != 0 : true;
             }
-            catch { return false; }
+            catch { return true; }
         }
 
         private void SetMultiControllerEnabled(bool enabled)
         {
-            _multiControllerEnabled = enabled;
+            lock (_inputStateLock)
+            {
+                _multiControllerEnabled = enabled;
+                if (!enabled)
+                    ReleaseControllerOutputs(SelectedControllerSource == SourceSony ? SourceXbox : SourceSony);
+            }
             try
             {
                 using var key = Registry.CurrentUser.CreateSubKey(SettingsRegistryKey);
@@ -168,9 +186,15 @@ namespace ControllerManager
         {
             LoadProfilesFromDisk();
             _currentProfileId = _profiles.FirstOrDefault()?.id ?? "";
+            _currentXboxProfileId = _currentProfileId;
 
-            // Abonnement nécessaire pour que Gamepad.Gamepads se remplisse (utilisé uniquement pour la batterie Xbox précise)
-            Gamepad.GamepadAdded += (_, _) => { };
+            // Écoute les changements de périphériques HID au lieu de scanner tout le bus HID toutes les secondes
+            // (un scan HidSharp pendant le handshake Bluetooth LE d'une manette Xbox peut faire tomber la liaison GATT)
+            DeviceList.Local.Changed += (_, _) =>
+            {
+                _sonyDeviceListDirty = true;
+                _lastHidChangeEvent = DateTime.Now;
+            };
 
             var contextMenu = new ContextMenuStrip();
             // La création du premier contrôle installe le contexte WinForms : on le garde pour le thread d'entrées
@@ -216,17 +240,17 @@ namespace ControllerManager
             };
             contextMenu.Items.Add(_startupToggleMenuItem);
 
-            var multiItem = new ToolStripMenuItem("🎮🎮 Toutes les manettes actives (PS + Xbox)")
+            _multiControllerMenuItem = new ToolStripMenuItem("🎮🎮 Toutes les manettes actives (PS + Xbox)")
             {
                 Checked = _multiControllerEnabled
             };
-            multiItem.Click += (_, _) =>
+            _multiControllerMenuItem.Click += (_, _) =>
             {
                 SetMultiControllerEnabled(!_multiControllerEnabled);
-                multiItem.Checked = _multiControllerEnabled;
+                _multiControllerMenuItem.Checked = _multiControllerEnabled;
                 SyncStateToWebView();
             };
-            contextMenu.Items.Add(multiItem);
+            contextMenu.Items.Add(_multiControllerMenuItem);
 
             if (!ElevationHelper.IsCurrentProcessElevated)
             {
@@ -249,6 +273,7 @@ namespace ControllerManager
             _driverToolsMenuItem = new ToolStripMenuItem("🛠️ Outils Pilotes & Reset Manettes");
             _driverToolsMenuItem.DropDownItems.Add("🟢 Relâcher Gâchettes L2/R2 (Remettre par défaut)", null, (_, _) => ResetTriggersToDefault());
             _driverToolsMenuItem.DropDownItems.Add("🔄 Reset Flux HID & Réveiller PS5 Bluetooth", null, (_, _) => ResetHidAndWakeSony());
+            _driverToolsMenuItem.DropDownItems.Add("🎮 Réparer Extinction / Déconnexion Manette Xbox (Bluetooth & Éco. Énergie)", null, (_, _) => RepairXboxWirelessDisconnect());
             _driverToolsMenuItem.DropDownItems.Add("🧹 Purger Conflits (Fermer DS4Windows / InputMapper)", null, (_, _) => KillConflictingApps(false));
             _driverToolsMenuItem.DropDownItems.Add("🎛️ Ouvrir Contrôleurs de jeu Windows (joy.cpl)", null, (_, _) => OpenWindowsTool("joy.cpl"));
             _driverToolsMenuItem.DropDownItems.Add("⚙️ Ouvrir Gestionnaire de périphériques", null, (_, _) => OpenWindowsTool("devmgmt.msc"));
@@ -266,10 +291,10 @@ namespace ControllerManager
             _trayIcon = new NotifyIcon
             {
                 Icon = TrayIconRenderer.Create(Color.FromArgb(0, 102, 255), paused: false),
-                Text = $"Gamepad Manager - {ActiveProfileName}",
                 ContextMenuStrip = contextMenu,
                 Visible = true
             };
+            SetTrayText($"Gamepad Manager - {ActiveProfileName}");
             _trayIcon.DoubleClick += (_, _) => ShowDashboard();
             UpdateTrayIcon();
 
@@ -285,6 +310,14 @@ namespace ControllerManager
                 Log.Warn("Hook de fenêtre active indisponible, détection du jeu toutes les 2 s");
 
             _actionRunner.LaunchHandler = HandleLaunchRequest;
+            _actionRunner.ProfileCycleHandler = delta => RunOnUiThread(() => CycleProfile(delta));
+            for (int i = 0; i < _controllerActions.Length; i++)
+            {
+                int source = i;
+                _controllerActions[i].LaunchHandler = (target, rawAction) => HandleLaunchRequest(target, rawAction, source);
+                _controllerActions[i].ProfileCycleHandler = delta =>
+                    RunOnUiThread(() => { if (CanUseController(source)) CycleProfile(delta, source); });
+            }
             _inputPollingThread = new System.Threading.Thread(InputPollingLoop) { IsBackground = true };
             _inputPollingThread.Start();
 
@@ -347,12 +380,28 @@ namespace ControllerManager
             if (_hudForm == null || _hudForm.IsDisposed || !_hudEnabled) return;
             var prof = GetActiveProfile();
             var c = prof?.color ?? new LightbarColor { r = 59, g = 130, b = 246 };
+            var (battery, device) = GetDisplayedBattery();
             _hudForm.UpdateHud(
                 ActiveProfileName,
-                $"{_lastBatteryPercent}%{(_lastBatteryCharging ? " ⚡" : "")}",
-                _selectedControllerType,
-                Color.FromArgb(c.r, c.g, c.b)
+                battery == null ? "--%" : $"{battery.Percent}%{(battery.Charging ? " ⚡" : "")}",
+                device,
+                Color.FromArgb(c.r, c.g, c.b),
+                lowBatteryAlert: battery is { Level: > BatteryAlert.None }
             );
+        }
+
+        private void UpdateTrayTooltipText()
+        {
+            var (battery, device) = GetDisplayedBattery();
+            string batSuffix = battery is { Level: > BatteryAlert.None } ? $" [🪫 {device} {battery.Percent}%]" : "";
+            SetTrayText($"Gamepad Manager{batSuffix} - {ActiveProfileName}");
+        }
+
+        // NotifyIcon.Text est limité à 63 caractères par l'API WinForms (lève ArgumentOutOfRangeException au-delà)
+        private void SetTrayText(string text)
+        {
+            if (_trayIcon == null) return;
+            _trayIcon.Text = text.Length > 63 ? text.Substring(0, 62) + "…" : text;
         }
 
         private void UpdateMappingToggleMenu()
@@ -361,7 +410,10 @@ namespace ControllerManager
             _mappingToggleMenuItem.Text = _mappingEnabled
                 ? "⌨️ Raccourcis & Sticks : Actifs"
                 : "🔇 Raccourcis & Sticks : En Pause (Mode Test)";
-            if (!_mappingEnabled) _actionRunner.ReleaseAll(); // pas de touche maintenue ni de turbo pendant la pause
+            if (!_mappingEnabled)
+            {
+                ReleaseAllControllerOutputs();
+            }
             UpdateTrayIcon();
         }
 
@@ -369,8 +421,11 @@ namespace ControllerManager
         {
             if (_trayIcon == null) return; // appelé pendant le constructeur, avant la création de l'icône
             var c = GetActiveProfile()?.color ?? new LightbarColor();
+            Color iconColor = GetDisplayedBattery().Reading is { Level: > BatteryAlert.None }
+                ? Color.FromArgb(239, 68, 68)
+                : Color.FromArgb(c.r, c.g, c.b);
             var old = _trayIcon.Icon;
-            _trayIcon.Icon = TrayIconRenderer.Create(Color.FromArgb(c.r, c.g, c.b), paused: !_mappingEnabled);
+            _trayIcon.Icon = TrayIconRenderer.Create(iconColor, paused: !_mappingEnabled);
             old?.Dispose();
         }
 
@@ -422,15 +477,15 @@ namespace ControllerManager
         {
             _controllersRootMenuItem.DropDownItems.Clear();
 
-            if (_connectedControllers.Count == 0)
-            {
-                var emptyItem = new ToolStripMenuItem("Aucune manette détectée") { Enabled = false };
-                _controllersRootMenuItem.DropDownItems.Add(emptyItem);
-                _controllersRootMenuItem.Text = "🕹️ Manette : Auto";
-                return;
-            }
+            var effectiveList = _connectedControllers.Count > 0
+                ? _connectedControllers
+                : new List<ControllerSlotInfo>
+                {
+                    new() { index = 99, type = "PS5", label = "Sony PS5 / PS4 (Pont HID C#)" },
+                    new() { index = 0, type = "XBOX", label = "Manette Xbox Series / One (XInput C#)" }
+                };
 
-            foreach (var ctrl in _connectedControllers)
+            foreach (var ctrl in effectiveList)
             {
                 bool isSel = ctrl.index == _selectedWebGpIndex;
                 var item = new ToolStripMenuItem($"[Port #{ctrl.index}] {ctrl.label}")
@@ -441,17 +496,19 @@ namespace ControllerManager
                 string targetType = ctrl.type;
                 item.Click += (_, _) =>
                 {
-                    _selectedWebGpIndex = targetIdx;
-                    _selectedControllerType = targetType;
-                    _lastBatteryCheck = DateTime.MinValue;
+                    SetControllerSelection(targetIdx, targetType);
+                    UpdateBatteryIndicators();
                     RebuildTrayControllersMenu();
+                    RebuildTrayProfilesMenu();
                     RefreshHudOverlayContent();
+                    UpdateTrayTooltipText();
                     SendToWebView(new { type = "selectControllerFromTray", index = targetIdx });
+                    SyncStateToWebView();
                 };
                 _controllersRootMenuItem.DropDownItems.Add(item);
             }
 
-            var current = _connectedControllers.FirstOrDefault(c => c.index == _selectedWebGpIndex) ?? _connectedControllers[0];
+            var current = effectiveList.FirstOrDefault(c => c.index == _selectedWebGpIndex) ?? effectiveList[0];
             _controllersRootMenuItem.Text = $"🕹️ Manette : #{current.index} {current.type}";
         }
 
@@ -474,9 +531,16 @@ namespace ControllerManager
 
             foreach (var prof in _profiles)
             {
-                var item = new ToolStripMenuItem($"{prof.name} ({prof.exe})")
+                string scInfo = "";
+                if (!string.IsNullOrWhiteSpace(prof.shortcutKey))
+                    scInfo += $" [⌨️ {prof.shortcutKey}]";
+                if (!string.IsNullOrWhiteSpace(prof.shortcutButtons))
+                    scInfo += $" [🎮 {FormatGamepadShortcutLabels(prof.shortcutButtons)}]";
+
+                var activeIdForSelected = GetActiveProfile()?.id ?? _currentProfileId;
+                var item = new ToolStripMenuItem($"{prof.name} ({prof.exe}){scInfo}")
                 {
-                    Checked = prof.id == _currentProfileId
+                    Checked = prof.id == activeIdForSelected
                 };
                 string targetId = prof.id;
                 item.Click += (_, _) =>
@@ -492,54 +556,110 @@ namespace ControllerManager
             UpdateTrayIcon(); // la couleur suit le profil actif
         }
 
+        private static readonly string[] ShortButtonNames =
+        {
+            "A/Croix", "B/Rond", "X/Carré", "Y/Triangle",
+            "LB/L1", "RB/R1", "LT/L2", "RT/R2",
+            "View/Share", "Menu/Options", "L3", "R3",
+            "D-Haut", "D-Bas", "D-Gauche", "D-Droit",
+            "PS", "Pavé G", "Pavé D", "Mute"
+        };
+
+        private static string FormatGamepadShortcutLabels(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return "";
+            var names = new List<string>();
+            foreach (var part in raw.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (int.TryParse(part, out int idx) && idx >= 0 && idx < ShortButtonNames.Length)
+                    names.Add(ShortButtonNames[idx]);
+            }
+            return string.Join(" + ", names);
+        }
+
         private async void ShowDashboard()
         {
             if (_dashboardForm != null && !_dashboardForm.IsDisposed)
             {
+                if (_dashboardForm.WindowState == FormWindowState.Minimized)
+                    _dashboardForm.WindowState = FormWindowState.Normal;
                 _dashboardForm.Activate();
                 return;
             }
+            if (_isOpeningDashboard) return;
+            _isOpeningDashboard = true;
 
-            _dashboardForm = new Form
+            try
             {
-                Text = "Gamepad OS — Console Diagnostic, Périphériques & Profils",
-                Size = new Size(1300, 900),
-                StartPosition = FormStartPosition.CenterScreen,
-                BackColor = Color.FromArgb(7, 7, 9),
-                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) // icône de l'exe (Assets/app.ico)
-            };
+                _dashboardForm = new Form
+                {
+                    Text = "Gamepad OS — Console Diagnostic, Périphériques & Profils",
+                    Size = new Size(1300, 900),
+                    StartPosition = FormStartPosition.CenterScreen,
+                    BackColor = Color.FromArgb(7, 7, 9),
+                    Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) // icône de l'exe (Assets/app.ico)
+                };
 
-            _webView = new WebView2 { Dock = DockStyle.Fill };
-            _dashboardForm.Controls.Add(_webView);
+                var webView = new WebView2 { Dock = DockStyle.Fill };
+                _webView = webView;
+                _dashboardForm.Controls.Add(webView);
 
-            _dashboardForm.FormClosing += (_, _) =>
+                _dashboardForm.FormClosing += (_, _) =>
+                {
+                    _isDashboardFocused = false;
+                    _webView?.Dispose();
+                    _webView = null;
+                    _trayIcon.ShowBalloonTip(2000, "Mode Tray Actif",
+                        "Dashboard fermé. Le contrôle souris/clavier, pavé tactile multipoint et profils restent actifs.",
+                        ToolTipIcon.Info);
+                };
+
+                _dashboardForm.Show();
+
+                // Désactive impérativement WindowsGamingInput côté Chromium pour éviter que WebView2 ne fasse tomber le Bluetooth LE Xbox
+                var envOptions = new CoreWebView2EnvironmentOptions("--disable-features=HardwareMediaKeyHandling,GamepadButtonAxisEvents,WindowsGamingInput");
+                Directory.CreateDirectory(WebViewDataDir);
+                var env = await CoreWebView2Environment.CreateAsync(null, WebViewDataDir, envOptions);
+
+                if (_dashboardForm == null || _dashboardForm.IsDisposed || webView.IsDisposed)
+                    return;
+
+                await webView.EnsureCoreWebView2Async(env);
+
+                if (_dashboardForm == null || _dashboardForm.IsDisposed || webView.IsDisposed || webView.CoreWebView2 == null)
+                    return;
+
+                webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+                webView.CoreWebView2.NavigationCompleted += (_, _) =>
+                {
+                    SyncStateToWebView();
+                    SendHardwareInventoryToWeb();
+                };
+
+                string htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UI", "index.html");
+                if (File.Exists(htmlPath))
+                {
+                    webView.CoreWebView2.Navigate(new Uri(htmlPath).AbsoluteUri);
+                }
+                else
+                {
+                    Log.Error($"Fichier d'interface introuvable : {htmlPath}");
+                }
+            }
+            catch (Exception ex)
             {
-                _isDashboardFocused = false;
-                _webView?.Dispose();
-                _webView = null;
-                _trayIcon.ShowBalloonTip(2000, "Mode Tray Actif",
-                    "Dashboard fermé. Le contrôle souris/clavier, pavé tactile multipoint et profils restent actifs.",
-                    ToolTipIcon.Info);
-            };
-
-            _dashboardForm.Show();
-
-            var envOptions = new CoreWebView2EnvironmentOptions("--disable-features=HardwareMediaKeyHandling,GamepadButtonAxisEvents");
-            Directory.CreateDirectory(WebViewDataDir);
-            var env = await CoreWebView2Environment.CreateAsync(null, WebViewDataDir, envOptions);
-            await _webView.EnsureCoreWebView2Async(env);
-
-            _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
-            _webView.CoreWebView2.NavigationCompleted += (_, _) =>
+                Log.Error("Ouverture du Dashboard WebView2 impossible", ex);
+                MessageBox.Show(
+                    "Impossible d'initialiser la fenêtre de configuration (Microsoft Edge WebView2).\n\n" +
+                    "La manette, les profils et les raccourcis restent actifs dans la barre des tâches.\n" +
+                    $"Détail : {ex.Message}",
+                    "ControllerManager — WebView2",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+            finally
             {
-                SyncStateToWebView();
-                SendHardwareInventoryToWeb();
-            };
-
-            string htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UI", "index.html");
-            if (File.Exists(htmlPath))
-            {
-                _webView.CoreWebView2.Navigate(new Uri(htmlPath).AbsoluteUri);
+                _isOpeningDashboard = false;
             }
         }
 
@@ -581,92 +701,6 @@ namespace ControllerManager
             }
         }
 
-        private void CheckBatteryAndNotify()
-        {
-            if ((DateTime.Now - _lastBatteryCheck).TotalSeconds < 10)
-                return;
-
-            _lastBatteryCheck = DateTime.Now;
-            bool controllerPresent = false;
-
-            try
-            {
-                int xSlot = XInput.FindSlot(_selectedWebGpIndex);
-                bool xboxSelected = _selectedControllerType == "XBOX" && xSlot >= 0;
-                // Pour Sony, la batterie est lue par la boucle HID : valable seulement si le flux est ouvert
-                controllerPresent = xboxSelected || _activeSonyStream != null;
-
-                if (xboxSelected)
-                {
-                    // Le rapport batterie WGI (précis au %) reste disponible en arrière-plan, contrairement aux lectures d'entrées
-                    bool gotPrecise = false;
-                    if (Gamepad.Gamepads.Count > 0)
-                    {
-                        var gp = (_selectedWebGpIndex >= 0 && _selectedWebGpIndex < Gamepad.Gamepads.Count)
-                            ? Gamepad.Gamepads[_selectedWebGpIndex]
-                            : Gamepad.Gamepads[0];
-
-                        var report = gp.TryGetBatteryReport();
-                        if (report != null && report.RemainingCapacityInMilliwattHours.HasValue && report.FullChargeCapacityInMilliwattHours.HasValue)
-                        {
-                            int full = report.FullChargeCapacityInMilliwattHours.Value;
-                            if (full > 0)
-                            {
-                                _lastBatteryPercent = (int)Math.Round((double)report.RemainingCapacityInMilliwattHours.Value / full * 100);
-                                gotPrecise = true;
-                            }
-                            _lastBatteryCharging = report.Status == Windows.System.Power.BatteryStatus.Charging;
-                        }
-                    }
-
-                    // Repli XInput : seulement 4 niveaux (vide / faible / moyen / plein)
-                    if (!gotPrecise &&
-                        XInput.XInputGetBatteryInformation((uint)xSlot, 0, out var bat) == XInput.ERROR_SUCCESS &&
-                        bat.BatteryType != XInput.BATTERY_TYPE_DISCONNECTED)
-                    {
-                        _lastBatteryPercent = bat.BatteryLevel switch { 0 => 5, 1 => 30, 2 => 65, _ => 100 };
-                        _lastBatteryCharging = bat.BatteryType == XInput.BATTERY_TYPE_WIRED;
-                    }
-                }
-            }
-            catch (Exception ex) { Log.Warn("Lecture de la batterie impossible", ex); }
-
-            if (_lastBatteryPercent >= 0)
-            {
-                _batteryMenuItem.Text = $"🔋 Batterie ({_selectedControllerType}) : {_lastBatteryPercent}% {(_lastBatteryCharging ? "(En charge)" : "")}";
-                RefreshHudOverlayContent();
-                SendToWebView(new { type = "battery", percent = _lastBatteryPercent, charging = _lastBatteryCharging });
-            }
-
-            if (controllerPresent)
-                NotifyLowBatteryIfNeeded(_lastBatteryPercent, _lastBatteryCharging);
-        }
-
-        // Alerte une seule fois par seuil (20 % puis 10 %) ; réarmée en charge ou au-dessus de 25 %
-        private void NotifyLowBatteryIfNeeded(int percent, bool charging)
-        {
-            if (charging || percent > 25)
-            {
-                _lowBatteryAlertLevel = 100;
-                return;
-            }
-
-            if (percent <= 10 && _lowBatteryAlertLevel > 10)
-            {
-                _lowBatteryAlertLevel = 10;
-                Log.Info($"Alerte batterie critique : {percent}% ({_selectedControllerType})");
-                _trayIcon.ShowBalloonTip(5000, "🪫 Batterie manette critique",
-                    $"Manette {_selectedControllerType} : {percent}%. Branchez-la rapidement.", ToolTipIcon.Warning);
-            }
-            else if (percent <= 20 && _lowBatteryAlertLevel > 20)
-            {
-                _lowBatteryAlertLevel = 20;
-                Log.Info($"Alerte batterie faible : {percent}% ({_selectedControllerType})");
-                _trayIcon.ShowBalloonTip(4000, "🔋 Batterie manette faible",
-                    $"Manette {_selectedControllerType} : {percent}%.", ToolTipIcon.Warning);
-            }
-        }
-
         private void CheckForegroundGameAndSwitchProfile()
         {
             IntPtr hwnd = GetForegroundWindow();
@@ -683,8 +717,11 @@ namespace ControllerManager
 
                 bool isSelf = pid == (uint)Environment.ProcessId;
                 _isDashboardFocused = isSelf;
-                if (isSelf) _actionRunner.ReleaseAll(); // le dashboard en avant : plus aucune action ne doit agir
-                if (isSelf) return;
+                if (isSelf)
+                {
+                    ReleaseAllControllerOutputs();
+                    return;
+                }
 
                 if (!_autoSwitchEnabled)
                 {
@@ -692,7 +729,7 @@ namespace ControllerManager
                     {
                         type = "activeProcess",
                         exe = exeName,
-                        profileId = _currentProfileId,
+                        profileId = GetActiveProfile()?.id ?? _currentProfileId,
                         profileName = ActiveProfileName,
                         autoSwitch = _autoSwitchEnabled,
                         mappingEnabled = _mappingEnabled
@@ -703,7 +740,7 @@ namespace ControllerManager
 
                 var matched = FindLaunchOverride(exeName) ?? LaunchProfileResolver.FindByExe(exeName, _profiles);
 
-                if (matched != null && matched.id != _currentProfileId)
+                if (matched != null && matched.id != GetActiveProfile()?.id)
                 {
                     ApplyProfile(matched.id, notifyUser: true);
                 }
@@ -713,7 +750,7 @@ namespace ControllerManager
                     {
                         type = "activeProcess",
                         exe = exeName,
-                        profileId = _currentProfileId,
+                        profileId = GetActiveProfile()?.id ?? _currentProfileId,
                         profileName = ActiveProfileName,
                         autoSwitch = _autoSwitchEnabled,
                         mappingEnabled = _mappingEnabled
@@ -752,21 +789,25 @@ namespace ControllerManager
 
         protected override void ExitThreadCore()
         {
+            _isShuttingDown = true;
             _backgroundTimer.Stop();
-            _actionRunner.ReleaseAll();
+            ReleaseAllControllerOutputs();
             if (_foregroundHook != IntPtr.Zero)
             {
                 UnhookWinEvent(_foregroundHook);
                 _foregroundHook = IntPtr.Zero;
             }
             _muteLedActive = false;
-            try { SendDualSenseOutputReport(0, 0, 0, "off", 0, "off", 0); } catch { }
+            try { FlushSonyOutputImmediate(0, 0, 0, "off", 0, "off", 0, 0, 0); } catch { }
             lock (_sonyLock)
             {
                 try { _activeSonyStream?.Dispose(); } catch { }
             }
+            _batteryAlertTimer?.Dispose();
+            _batteryAlertForm?.Dispose();
             _hudForm?.Close();
             _trayIcon.Visible = false;
+            _trayIcon.Dispose();
             _webView?.Dispose();
             base.ExitThreadCore();
         }

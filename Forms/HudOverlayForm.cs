@@ -34,12 +34,15 @@ namespace ControllerManager
             }
         }
 
-        public void UpdateHud(string profile, string battery, string mode, Color accent)
+        private bool _lowBatteryAlert = false;
+
+        public void UpdateHud(string profile, string battery, string mode, Color accent, bool lowBatteryAlert = false)
         {
             _profileText = profile;
             _batteryText = battery;
             _modeText = mode;
-            _accentColor = accent;
+            _lowBatteryAlert = lowBatteryAlert;
+            _accentColor = lowBatteryAlert ? Color.FromArgb(239, 68, 68) : accent;
             if (IsHandleCreated && Visible)
             {
                 BeginInvoke(new Action(Invalidate));
@@ -59,12 +62,13 @@ namespace ControllerManager
             g.FillRectangle(barBrush, 0, 0, 6, Height);
 
             using var titleFont = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-            using var subFont = new Font("Consolas", 8.5f, FontStyle.Regular);
+            using var subFont = new Font("Consolas", 8.5f, _lowBatteryAlert ? FontStyle.Bold : FontStyle.Regular);
             using var whiteBrush = new SolidBrush(Color.White);
-            using var mutedBrush = new SolidBrush(Color.FromArgb(165, 175, 190));
+            using var subBrush = new SolidBrush(_lowBatteryAlert ? Color.FromArgb(252, 165, 165) : Color.FromArgb(165, 175, 190));
 
+            string batIcon = _lowBatteryAlert ? "🪫 ALERTE" : "🔋";
             g.DrawString($"🎮 {_profileText}", titleFont, whiteBrush, new PointF(14, 7));
-            g.DrawString($"🔋 {_batteryText}  •  {_modeText}", subFont, mutedBrush, new PointF(14, 29));
+            g.DrawString($"{batIcon} {_batteryText}  •  {_modeText}", subFont, subBrush, new PointF(14, 29));
         }
     }
 }

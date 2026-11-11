@@ -26,6 +26,11 @@ namespace ControllerManager
         public int l2TriggerForce { get; set; } = 180;
         public string r2TriggerMode { get; set; } = "off";
         public int r2TriggerForce { get; set; } = 180;
+        // Raccourcis d'activation directe propres à ce profil :
+        // 1) Touche / combinaison clavier globale (ex. « Ctrl+F1 », « Alt+1 », « F9 »)
+        public string shortcutKey { get; set; } = "";
+        // 2) Combinaison de boutons manette (indices 0..19 séparés par '+', ex. « 4+0 » pour LB/L1 + A/Croix)
+        public string shortcutButtons { get; set; } = "";
         public LightbarColor color { get; set; } = new();
         public Dictionary<string, string> buttonMapping { get; set; } = new();
     }
