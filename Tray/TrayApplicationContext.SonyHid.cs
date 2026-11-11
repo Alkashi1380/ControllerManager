@@ -364,7 +364,7 @@ namespace ControllerManager
 
                 // Désactive l'économie d'énergie Windows (PnPCapabilities = 24) sur les adaptateurs Bluetooth,
                 // récepteurs Xbox Wireless et périphériques HID Bluetooth LE (cause n°1 de l'extinction après 2 s),
-                // et redémarre le service Bluetooth si l'application a les droits ou via élévation PowerShell.
+                // et désactive la mise en veille sélective USB (powercfg), via élévation PowerShell si nécessaire.
                 string psCommand =
                     "$ErrorActionPreference='SilentlyContinue'; " +
                     "Get-PnpDevice | Where-Object { $_.FriendlyName -match 'Xbox|Bluetooth|XINPUT|GIP|BTHLE|Game Controller' } | ForEach-Object { " +
@@ -377,10 +377,15 @@ namespace ControllerManager
                     "powercfg /SETDCVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0; " +
                     "powercfg /SETACTIVE SCHEME_CURRENT";
 
+                // -EncodedCommand (UTF-16LE en Base64) : les guillemets du script ne passent plus par la ligne
+                // de commande Windows. Avec -Command "...", les guillemets internes coupaient l'argument et
+                // la partie registre échouait silencieusement.
+                string encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(psCommand));
+
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "powershell.exe",
-                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"{psCommand}\"",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {encoded}",
                     UseShellExecute = !ElevationHelper.IsCurrentProcessElevated,
                     CreateNoWindow = ElevationHelper.IsCurrentProcessElevated
                 };
